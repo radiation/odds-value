@@ -1,54 +1,51 @@
 from __future__ import annotations
 
+import re
+
 from datetime import datetime, timezone
 from typing import Any
 
 from odds_value.db.enums import GameStatusEnum
 
+_WEEK_RE = re.compile(r"week\s*(\d+)", re.IGNORECASE)
 
-def parse_api_sports_game_datetime(
-    value: Any,
-    *,
-    provider_game_id: str,
-) -> datetime:
+
+def parse_week(value: Any) -> int | None:
     """
-    Parse api-sports game date field into a tz-aware UTC datetime.
+    Parse api-sports week values.
 
-    Supports:
-    - ISO string: "2025-09-07T20:20:00+00:00"
-    - Dict format:
-      {
-        "timezone": "UTC",
-        "date": "YYYY-MM-DD",
-        "time": "HH:MM",
-        "timestamp": 1754006400
-      }
+    Handles:
+      - 1
+      - "1"
+      - "Week 1"
+      - "WEEK 12"
+      - None / non-week strings
+
+    Returns int or None.
     """
+    if value is None:
+        return None
 
-    # Case 1: american-football dict format
-    if isinstance(value, dict):
-        ts = value.get("timestamp")
-        if isinstance(ts, int):
-            return datetime.fromtimestamp(ts, tz=timezone.utc)
+    # Already numeric
+    if isinstance(value, int):
+        return value
 
-        date_part = value.get("date")
-        time_part = value.get("time") or "00:00"
-
-        if not isinstance(date_part, str):
-            raise ValueError(
-                f"Missing/invalid game.date.date for provider_game_id={provider_game_id}: {value}"
-            )
-
-        return datetime.fromisoformat(f"{date_part}T{time_part}:00+00:00")
-
-    # Case 2: ISO string
     if isinstance(value, str):
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        s = value.strip()
 
-    # Anything else → schema drift
-    raise ValueError(
-        f"Missing/invalid game.date for provider_game_id={provider_game_id}: {value!r}"
-    )
+        # Direct numeric string
+        if s.isdigit():
+            return int(s)
+
+        # "Week X" pattern
+        match = _WEEK_RE.search(s)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                return None
+
+    return None
 
 
 def map_game_status(short_code: str | None) -> GameStatusEnum:

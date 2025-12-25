@@ -25,7 +25,10 @@ class Game(Base, TimestampMixin):
     venue_id: Mapped[Optional[int]] = mapped_column(ForeignKey("venues.id", ondelete="SET NULL"), nullable=True)
 
     status: Mapped[GameStatusEnum] = mapped_column(nullable=False, default=GameStatusEnum.UNKNOWN)
+    stage: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     week: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    week_label: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    week_source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     game_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_neutral_site: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 

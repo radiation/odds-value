@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 from odds_value.db.enums import SeasonTypeEnum, SportEnum
 from odds_value.db.models import Game, IngestedPayload, League, Season, Team, TeamGameStats, Venue
 from odds_value.ingestion.api_sports.mappers import (
-    coerce_int, map_game_status, parse_api_sports_game_datetime, stats_list_to_map
+    coerce_int, map_game_status, parse_week, stats_list_to_map,
+)
+from odds_value.ingestion.api_sports.dates import (
+    compute_week_from_start_time_nfl,
+    parse_api_sports_game_datetime,
 )
 
 
@@ -213,7 +217,11 @@ def upsert_game_from_api_sports_item(
         if isinstance(a, dict):
             away_score = coerce_int(a.get("total"))
 
-    week = coerce_int(game_obj.get("week"))
+    week_raw = game_obj.get("week")
+    week = parse_week(week_raw)
+
+    if week is None and league.sport == SportEnum.NFL:
+        week = compute_week_from_start_time_nfl(start_time, season_year=season.year)
 
     game = session.scalar(select(Game).where(Game.provider_game_id == provider_game_id))
     if game:
