@@ -1,8 +1,8 @@
 """create core tables
 
-Revision ID: f04ba40e4215
+Revision ID: 9c50cc1a5a7d
 Revises: 
-Create Date: 2025-12-25 11:33:07.920594
+Create Date: 2025-12-25 14:10:55.061998
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'f04ba40e4215'
+revision: str = '9c50cc1a5a7d'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -110,7 +110,10 @@ def upgrade() -> None:
     sa.Column('start_time', sa.DateTime(), nullable=False),
     sa.Column('venue_id', sa.Integer(), nullable=True),
     sa.Column('status', sa.Enum('SCHEDULED', 'IN_PROGRESS', 'FINAL', 'POSTPONED', 'CANCELED', 'UNKNOWN', name='gamestatusenum'), nullable=False),
+    sa.Column('stage', sa.String(), nullable=True),
     sa.Column('week', sa.Integer(), nullable=True),
+    sa.Column('week_label', sa.String(), nullable=True),
+    sa.Column('week_source', sa.String(), nullable=True),
     sa.Column('game_number', sa.Integer(), nullable=True),
     sa.Column('is_neutral_site', sa.Boolean(), server_default='false', nullable=False),
     sa.Column('home_team_id', sa.Integer(), nullable=False),

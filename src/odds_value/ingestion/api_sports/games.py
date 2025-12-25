@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import typer
+
 from odds_value.db.enums import SeasonTypeEnum, SportEnum
 from odds_value.db.models import Game, League, Team
 from odds_value.ingestion.api_sports.client import ApiSportsClient
@@ -16,13 +18,17 @@ from odds_value.ingestion.api_sports.upsert import (
     upsert_season,
     upsert_team_game_stats,
 )
+from odds_value.ingestion.api_sports.dates import (
+    in_nfl_regular_season_window,
+    parse_api_sports_game_datetime,
+)
 
 
 def is_regular_season_game(item: dict[str, Any]) -> bool:
     game = item.get("game") or {}
     stage = game.get("stage")
     if not isinstance(stage, str):
-        return True  # be permissive if missing
+        return True
     return stage.strip().lower() in {"regular season", "reg", "regular"}
 
 
@@ -70,9 +76,28 @@ def ingest_games(
     )
 
     count = 0
+    skipped = 0
+
     for item in items:
-        if not is_regular_season_game(item):
+        game_obj = item.get("game") or {}
+        provider_game_id = str(game_obj.get("id"))
+
+        # Parse start_time *before* upsert so we can filter without side effects
+        start_time = parse_api_sports_game_datetime(
+            game_obj.get("date"),
+            provider_game_id=provider_game_id,
+        )
+
+        # Skip preseason reliably even when stage is missing
+        if sport == SportEnum.NFL and not in_nfl_regular_season_window(start_time, season_year):
+            skipped += 1
             continue
+
+        # Optional: keep your stage-based filter too (harmless)
+        if not is_regular_season_game(item):
+            skipped += 1
+            continue
+
         upsert_game_from_api_sports_item(
             session,
             league=league,
@@ -81,6 +106,8 @@ def ingest_games(
             source_last_seen_at=fetched_at,
         )
         count += 1
+
+    typer.echo(f"Skipped {skipped} games outside regular-season window")
 
     return count
 

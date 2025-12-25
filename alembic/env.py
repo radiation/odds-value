@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql.type_api import TypeEngine
 
 from odds_value.db.base import Base
-from odds_value.db import models  # noqa: F401
+import odds_value.db.models  # noqa: F401
 
 
 config = context.config
