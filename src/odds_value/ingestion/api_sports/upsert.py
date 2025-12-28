@@ -11,7 +11,7 @@ from odds_value.db.models import Game, IngestedPayload, League, Season, Team, Te
 from odds_value.ingestion.api_sports.mappers import (
     coerce_int, map_game_status, parse_week, stats_list_to_map,
 )
-from odds_value.ingestion.api_sports.dates import (
+from odds_value.ingestion.common.dates import (
     compute_week_from_start_time_nfl,
     parse_api_sports_game_datetime,
 )

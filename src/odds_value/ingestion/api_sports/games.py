@@ -18,7 +18,7 @@ from odds_value.ingestion.api_sports.upsert import (
     upsert_season,
     upsert_team_game_stats,
 )
-from odds_value.ingestion.api_sports.dates import (
+from odds_value.ingestion.common.dates import (
     in_nfl_regular_season_window,
     parse_api_sports_game_datetime,
 )

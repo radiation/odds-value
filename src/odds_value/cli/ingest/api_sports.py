@@ -9,7 +9,7 @@ from odds_value.db.enums import SeasonTypeEnum, SportEnum
 from odds_value.ingestion.api_sports.client import ApiSportsClient
 from odds_value.ingestion.api_sports.games import ingest_game_stats, ingest_games, ingest_games_with_stats
 
-ingest_app = typer.Typer(no_args_is_help=True)
+api_sports_app = typer.Typer(no_args_is_help=True)
 
 
 def _session() -> Session:
@@ -18,11 +18,14 @@ def _session() -> Session:
     return SessionLocal()
 
 
-def _client() -> ApiSportsClient:
-    return ApiSportsClient(base_url=settings.api_sports_base_url, api_key=settings.api_sports_key)
+def _api_sports_client() -> ApiSportsClient:
+    return ApiSportsClient(
+        base_url=settings.api_sports_base_url,
+        api_key=settings.require_api_sports_key(),
+    )
 
 
-@ingest_app.command("games")
+@api_sports_app.command("games")
 def ingest_games_cmd(
     provider_league_id: str = typer.Option(..., help="api-sports league id"),
     league_name: str = typer.Option(..., help="Human name to store (e.g., NFL)"),
@@ -31,7 +34,7 @@ def ingest_games_cmd(
     season_type: SeasonTypeEnum | None = typer.Option(None, help="PRE/REG/POST"),
 ) -> None:
     with _session() as session:
-        client = _client()
+        client = _api_sports_client()
         count = ingest_games(
             session,
             client=client,
@@ -46,12 +49,12 @@ def ingest_games_cmd(
     typer.echo(f"Ingested/updated games: {count}")
 
 
-@ingest_app.command("game-stats")
+@api_sports_app.command("game-stats")
 def ingest_game_stats_cmd(
     provider_game_id: str = typer.Option(..., help="api-sports game id"),
 ) -> None:
     with _session() as session:
-        client = _client()
+        client = _api_sports_client()
         updated = ingest_game_stats(
             session,
             client=client,
@@ -62,7 +65,7 @@ def ingest_game_stats_cmd(
     typer.echo(f"Upserted team_game_stats rows: {updated}")
 
 
-@ingest_app.command("games-with-stats")
+@api_sports_app.command("games-with-stats")
 def ingest_games_with_stats_cmd(
     provider_league_id: str = typer.Option(..., help="api-sports league id"),
     league_name: str = typer.Option(..., help="Human name to store (e.g., NFL)"),
@@ -71,7 +74,7 @@ def ingest_games_with_stats_cmd(
     season_type: SeasonTypeEnum | None = typer.Option(None, help="PRE/REG/POST"),
 ) -> None:
     with _session() as session:
-        client = _client()
+        client = _api_sports_client()
         games_count, stats_rows = ingest_games_with_stats(
             session,
             client=client,
