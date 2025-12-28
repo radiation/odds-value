@@ -14,9 +14,11 @@ class Book(Base, TimestampMixin):
     key: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
 
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
-    odds_snapshots: Mapped[list["OddsSnapshot"]] = relationship(
+    odds_snapshots: Mapped[list[OddsSnapshot]] = relationship(
         back_populates="book",
         cascade="all, delete-orphan",
     )

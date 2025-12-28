@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -24,18 +23,22 @@ class OddsSnapshot(Base, TimestampMixin):
     side_type: Mapped[SideTypeEnum] = mapped_column(nullable=False)
 
     # SPREAD/TOTAL => numeric value (e.g., -3.5, 44.5). MONEYLINE => NULL.
-    line: Mapped[Optional[float]] = mapped_column(Numeric(6, 2), nullable=True)
+    line: Mapped[float | None] = mapped_column(Numeric(6, 2), nullable=True)
 
     # American odds: -110, +120, etc.
     price: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    is_closing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_closing: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Keep provider as a string for now (enum later if you want it).
-    provider: Mapped[str] = mapped_column(String, nullable=False, default="odds-api", server_default="odds-api")
+    provider: Mapped[str] = mapped_column(
+        String, nullable=False, default="odds-api", server_default="odds-api"
+    )
 
-    game: Mapped["Game"] = relationship(back_populates="odds_snapshots")
-    book: Mapped["Book"] = relationship(back_populates="odds_snapshots")
+    game: Mapped[Game] = relationship(back_populates="odds_snapshots")
+    book: Mapped[Book] = relationship(back_populates="odds_snapshots")
 
     __table_args__ = (
         Index("ix_odds_snapshots_game_captured_at", "game_id", "captured_at"),
@@ -51,5 +54,5 @@ class OddsSnapshot(Base, TimestampMixin):
     )
 
 
-from odds_value.db.models.game import Game  # noqa: E402
 from odds_value.db.models.book import Book  # noqa: E402
+from odds_value.db.models.game import Game  # noqa: E402

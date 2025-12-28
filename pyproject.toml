@@ -3,7 +3,7 @@ name = "odds-value"
 version = "0.1.0"
 description = "Sports expected value system"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "typer",
     "pydantic",
@@ -50,7 +50,9 @@ testpaths = ["tests"]
 python_version = "3.13"
 strict = true
 mypy_path = ["src"]
-exclude = "(alembic/versions/|build/|dist/)"
+packages = ["odds_value"]
+explicit_package_bases = true
+exclude = "(^alembic/|^build/|^dist/)"
 plugins = []
 warn_unused_ignores = true
 warn_redundant_casts = true

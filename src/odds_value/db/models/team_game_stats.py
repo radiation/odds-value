@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, JSON, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -24,12 +24,12 @@ class TeamGameStats(Base, TimestampMixin):
     )
 
     # Convenience fields (optional but useful)
-    points: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    yards_total: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    turnovers: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    yards_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    turnovers: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    game: Mapped["Game"] = relationship(back_populates="team_stats")
-    team: Mapped["Team"] = relationship(back_populates="team_game_stats")
+    game: Mapped[Game] = relationship(back_populates="team_stats")
+    team: Mapped[Team] = relationship(back_populates="team_game_stats")
 
     __table_args__ = (
         UniqueConstraint("game_id", "team_id", name="uq_team_game_stats_game_team"),

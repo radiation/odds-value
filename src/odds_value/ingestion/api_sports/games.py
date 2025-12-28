@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
+import typer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import typer
-
 from odds_value.db.enums import SeasonTypeEnum, SportEnum
 from odds_value.db.models import Game, League, Team
-from odds_value.ingestion.api_sports.client import ApiSportsClient
-from odds_value.ingestion.api_sports.upsert import (
+from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
+from odds_value.ingestion.api_sports.api_sports_upsert import (
     maybe_store_payload,
     upsert_game_from_api_sports_item,
     upsert_league,
@@ -43,7 +42,7 @@ def ingest_games(
     season_type: SeasonTypeEnum | None = None,
     store_payloads: bool,
 ) -> int:
-    fetched_at = datetime.now(timezone.utc)
+    fetched_at = datetime.now(UTC)
 
     # Fetch games list
     items = client.get_response_items(
@@ -119,11 +118,13 @@ def ingest_game_stats(
     provider_game_id: str,
     store_payloads: bool,
 ) -> int:
-    fetched_at = datetime.now(timezone.utc)
+    fetched_at = datetime.now(UTC)
 
     game = session.scalar(select(Game).where(Game.provider_game_id == str(provider_game_id)))
     if not game:
-        raise ValueError(f"Game not found for provider_game_id={provider_game_id}. Ingest games first.")
+        raise ValueError(
+            f"Game not found for provider_game_id={provider_game_id}. Ingest games first."
+        )
 
     # Fetch team statistics for this game
     items = client.get_response_items("/games/statistics", params={"game": provider_game_id})
@@ -143,11 +144,13 @@ def ingest_game_stats(
     updated = 0
     for row in items:
         team_obj: dict[str, Any] = row.get("team") or {}
-        stats_list: list[dict[str, Any]] | None = row.get("statistics")  # type: ignore[assignment]
+        stats_list: list[dict[str, Any]] | None = row.get("statistics")
 
         provider_team_id = str(team_obj.get("id"))
         team = session.scalar(
-            select(Team).where(Team.league_id == game.league_id, Team.provider_team_id == provider_team_id)
+            select(Team).where(
+                Team.league_id == game.league_id, Team.provider_team_id == provider_team_id
+            )
         )
         if not team:
             continue
@@ -183,8 +186,12 @@ def ingest_games_with_stats(
 
     # Now pull stats for every game we just ingested for that league/season
     games = session.scalars(
-        select(Game)
-        .where(Game.league_id == session.scalar(select(League.id).where(League.provider_league_id == provider_league_id)))
+        select(Game).where(
+            Game.league_id
+            == session.scalar(
+                select(League.id).where(League.provider_league_id == provider_league_id)
+            )
+        )
     ).all()
 
     stats_rows = 0

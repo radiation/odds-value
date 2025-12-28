@@ -12,7 +12,7 @@ class OddsApiClient:
     api_key: str
     timeout_s: float = 30.0
 
-    def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | list[Any]:
         url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
         merged = dict(params or {})
         merged["apiKey"] = self.api_key
@@ -22,6 +22,6 @@ class OddsApiClient:
             resp.raise_for_status()
             data: Any = resp.json()
 
-        if not isinstance(data, (dict, list)):
+        if not isinstance(data, dict | list):
             raise TypeError(f"Unexpected Odds API response type: {type(data)}")
         return data  # Odds API endpoints return lists for /odds, dicts for some others

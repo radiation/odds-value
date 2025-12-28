@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from odds_value.db.enums import MarketTypeEnum, SideTypeEnum
-
 
 # ---------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------
 
 
-def _parse_iso_utc(s: str) -> Optional[datetime]:
+def _parse_iso_utc(s: str) -> datetime | None:
     try:
         # Odds API uses "...Z"
         if s.endswith("Z"):
@@ -20,26 +19,20 @@ def _parse_iso_utc(s: str) -> Optional[datetime]:
             dt = datetime.fromisoformat(s)
 
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
 
         # Normalize to UTC and strip microseconds for stable equality in SQLite
-        dt = dt.astimezone(timezone.utc).replace(microsecond=0)
+        dt = dt.astimezone(UTC).replace(microsecond=0)
         return dt
     except Exception:
         return None
 
 
 def _norm(s: str) -> str:
-    return " ".join(
-        s.lower()
-        .replace(".", "")
-        .replace("-", " ")
-        .replace("&", "and")
-        .split()
-    )
+    return " ".join(s.lower().replace(".", "").replace("-", " ").replace("&", "and").split())
 
 
-def _side_home_away(*, outcome_name: str, home_team: str, away_team: str) -> Optional[SideTypeEnum]:
+def _side_home_away(*, outcome_name: str, home_team: str, away_team: str) -> SideTypeEnum | None:
     n = _norm(outcome_name)
     if n == _norm(home_team):
         return SideTypeEnum.HOME
@@ -48,7 +41,7 @@ def _side_home_away(*, outcome_name: str, home_team: str, away_team: str) -> Opt
     return None
 
 
-def _side_over_under(*, outcome_name: str) -> Optional[SideTypeEnum]:
+def _side_over_under(*, outcome_name: str) -> SideTypeEnum | None:
     n = _norm(outcome_name)
     if n == "over":
         return SideTypeEnum.OVER
@@ -125,7 +118,11 @@ def map_event_to_snapshots(
             # 3) fetched_at (fallback)
             captured_at = m_captured_at or bm_captured_at or fetched_at.replace(microsecond=0)
             if m_captured_at is None and bm_captured_at is None:
-                print("WARN: last_update parse failed; falling back to fetched_at:", m.get("last_update"), bm.get("last_update"))
+                print(
+                    "WARN: last_update parse failed; falling back to fetched_at:",
+                    m.get("last_update"),
+                    bm.get("last_update"),
+                )
 
             outcomes = m.get("outcomes") or []
             if not isinstance(outcomes, list):
@@ -143,7 +140,9 @@ def map_event_to_snapshots(
                     if not isinstance(name, str) or not isinstance(price, int):
                         continue
 
-                    side = _side_home_away(outcome_name=name, home_team=home_team, away_team=away_team)
+                    side = _side_home_away(
+                        outcome_name=name, home_team=home_team, away_team=away_team
+                    )
                     if side is None:
                         continue
 
@@ -171,10 +170,16 @@ def map_event_to_snapshots(
                     name = o.get("name")
                     price = o.get("price")
                     point = o.get("point")
-                    if not isinstance(name, str) or not isinstance(price, int) or not isinstance(point, (int, float)):
+                    if (
+                        not isinstance(name, str)
+                        or not isinstance(price, int)
+                        or not isinstance(point, int | float)
+                    ):
                         continue
 
-                    side = _side_home_away(outcome_name=name, home_team=home_team, away_team=away_team)
+                    side = _side_home_away(
+                        outcome_name=name, home_team=home_team, away_team=away_team
+                    )
                     if side is None:
                         continue
 
@@ -202,7 +207,11 @@ def map_event_to_snapshots(
                     name = o.get("name")
                     price = o.get("price")
                     point = o.get("point")
-                    if not isinstance(name, str) or not isinstance(price, int) or not isinstance(point, (int, float)):
+                    if (
+                        not isinstance(name, str)
+                        or not isinstance(price, int)
+                        or not isinstance(point, int | float)
+                    ):
                         continue
 
                     side = _side_over_under(outcome_name=name)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,29 +11,33 @@ class Team(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    league_id: Mapped[int] = mapped_column(ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False)
+    league_id: Mapped[int] = mapped_column(
+        ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False
+    )
     provider_team_id: Mapped[str] = mapped_column(String, nullable=False)
 
     name: Mapped[str] = mapped_column(String, nullable=False)
-    abbreviation: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    city: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    nickname: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    logo_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    abbreviation: Mapped[str | None] = mapped_column(String, nullable=True)
+    city: Mapped[str | None] = mapped_column(String, nullable=True)
+    nickname: Mapped[str | None] = mapped_column(String, nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
 
-    league: Mapped["League"] = relationship(back_populates="teams")
+    league: Mapped[League] = relationship(back_populates="teams")
 
-    home_games: Mapped[list["Game"]] = relationship(
+    home_games: Mapped[list[Game]] = relationship(
         back_populates="home_team",
         foreign_keys="Game.home_team_id",
     )
-    away_games: Mapped[list["Game"]] = relationship(
+    away_games: Mapped[list[Game]] = relationship(
         back_populates="away_team",
         foreign_keys="Game.away_team_id",
     )
 
-    team_game_stats: Mapped[list["TeamGameStats"]] = relationship(back_populates="team")
+    team_game_stats: Mapped[list[TeamGameStats]] = relationship(back_populates="team")
 
     __table_args__ = (
         UniqueConstraint("league_id", "provider_team_id", name="uq_teams_league_provider_team_id"),
@@ -44,6 +46,6 @@ class Team(Base, TimestampMixin):
     )
 
 
-from odds_value.db.models.league import League  # noqa: E402
 from odds_value.db.models.game import Game  # noqa: E402
+from odds_value.db.models.league import League  # noqa: E402
 from odds_value.db.models.team_game_stats import TeamGameStats  # noqa: E402

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from odds_value.db.enums import SportEnum
 from odds_value.db.models import Book, Game, IngestedPayload, League, OddsSnapshot
-
 
 # ---------------------------------------------------------
 # Small helpers
@@ -17,16 +16,10 @@ from odds_value.db.models import Book, Game, IngestedPayload, League, OddsSnapsh
 
 def _norm_team_name(s: str) -> str:
     # Keep it intentionally simple (matches api_sports “simple helpers” vibe).
-    return " ".join(
-        s.lower()
-        .replace(".", "")
-        .replace("-", " ")
-        .replace("&", "and")
-        .split()
-    )
+    return " ".join(s.lower().replace(".", "").replace("-", " ").replace("&", "and").split())
 
 
-def _parse_iso_utc(s: str) -> Optional[datetime]:
+def _parse_iso_utc(s: str) -> datetime | None:
     """
     Odds API uses ISO strings, often ending with 'Z'.
     Return tz-aware UTC datetime, or None.
@@ -38,9 +31,9 @@ def _parse_iso_utc(s: str) -> Optional[datetime]:
             dt = datetime.fromisoformat(s)
 
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
 
-        return dt.astimezone(timezone.utc)
+        return dt.astimezone(UTC)
     except ValueError:
         return None
 
@@ -74,7 +67,7 @@ def find_game_for_odds_event(
     away_team_name: str,
     commence_time_iso: str,
     kickoff_tolerance_minutes: int = 15,
-) -> Optional[Game]:
+) -> Game | None:
     """
     Resolve an Odds API event to a canonical Game.
 
@@ -112,7 +105,10 @@ def find_game_for_odds_event(
     matches: list[Game] = []
     for g in candidates:
         # Use relationship-loaded teams
-        if _norm_team_name(g.home_team.name) == home_norm and _norm_team_name(g.away_team.name) == away_norm:
+        if (
+            _norm_team_name(g.home_team.name) == home_norm
+            and _norm_team_name(g.away_team.name) == away_norm
+        ):
             matches.append(g)
 
     if len(matches) != 1:

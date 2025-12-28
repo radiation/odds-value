@@ -28,7 +28,9 @@ class ApiSportsClient:
 
         return data
 
-    def get_response_items(self, path: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def get_response_items(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         payload = self.get(path, params=params)
         items = payload.get("response")
         if not isinstance(items, list):

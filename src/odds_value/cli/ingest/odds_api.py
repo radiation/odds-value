@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 from sqlalchemy.orm import Session
 
 from odds_value.core.config import settings
 from odds_value.db import DatabaseConfig, create_db_engine, create_session_factory
 from odds_value.db.enums import SportEnum
-from odds_value.ingestion.odds_api.client import OddsApiClient
 from odds_value.ingestion.odds_api.odds import ingest_odds
+from odds_value.ingestion.odds_api.odds_api_client import OddsApiClient
 
 odds_api_app = typer.Typer(no_args_is_help=True)
 
@@ -32,19 +34,17 @@ def _odds_api_client() -> OddsApiClient:
 
 @odds_api_app.command("odds")
 def ingest_odds_cmd(
-    sport: SportEnum = typer.Option(SportEnum.NFL, help="Sport enum"),
-    days_ahead: int = typer.Option(
-        7,
-        help="How many days ahead to fetch odds for (Odds API returns upcoming games)",
-    ),
-    regions: str = typer.Option(
-        "us",
-        help="Odds API regions parameter (e.g. us, eu)",
-    ),
-    markets: str = typer.Option(
-        "h2h,spreads,totals",
-        help="Markets to fetch (h2h, spreads, totals)",
-    ),
+    sport: Annotated[SportEnum, typer.Option(help="Sport enum")] = SportEnum.NFL,
+    days_ahead: Annotated[
+        int,
+        typer.Option(
+            help="How many days ahead to fetch odds for (Odds API returns upcoming games)"
+        ),
+    ] = 7,
+    regions: Annotated[str, typer.Option(help="Odds API regions parameter (e.g. us, eu)")] = "us",
+    markets: Annotated[
+        str, typer.Option(help="Markets to fetch (h2h, spreads, totals)")
+    ] = "h2h,spreads,totals",
 ) -> None:
     """
     Ingest main-line odds (moneyline, spreads, totals) from Odds API.

@@ -16,8 +16,12 @@ class IngestedPayload(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     provider: Mapped[str] = mapped_column(String, nullable=False)  # e.g., "api-sports"
-    entity_type: Mapped[str] = mapped_column(String, nullable=False)  # "league", "team", "game", "stats"
-    entity_key: Mapped[str] = mapped_column(String, nullable=False)  # provider ids or composite keys
+    entity_type: Mapped[str] = mapped_column(
+        String, nullable=False
+    )  # "league", "team", "game", "stats"
+    entity_key: Mapped[str] = mapped_column(
+        String, nullable=False
+    )  # provider ids or composite keys
 
     fetched_at: Mapped[datetime] = mapped_column(nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(

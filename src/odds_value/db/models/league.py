@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy import Boolean, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,20 +16,22 @@ class League(Base, TimestampMixin):
 
     sport: Mapped[SportEnum] = mapped_column(nullable=False)
 
-    country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
-
-    seasons: Mapped[list["Season"]] = relationship(back_populates="league", cascade="all, delete-orphan")
-    teams: Mapped[list["Team"]] = relationship(back_populates="league", cascade="all, delete-orphan")
-    venues: Mapped[list["Venue"]] = relationship(back_populates="league")
-    games: Mapped[list["Game"]] = relationship(back_populates="league")
-
-    __table_args__ = (
-        Index("ix_leagues_sport_active", "sport", "is_active"),
+    country: Mapped[str | None] = mapped_column(String, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
     )
 
+    seasons: Mapped[list[Season]] = relationship(
+        back_populates="league", cascade="all, delete-orphan"
+    )
+    teams: Mapped[list[Team]] = relationship(back_populates="league", cascade="all, delete-orphan")
+    venues: Mapped[list[Venue]] = relationship(back_populates="league")
+    games: Mapped[list[Game]] = relationship(back_populates="league")
 
+    __table_args__ = (Index("ix_leagues_sport_active", "sport", "is_active"),)
+
+
+from odds_value.db.models.game import Game  # noqa: E402
 from odds_value.db.models.season import Season  # noqa: E402
 from odds_value.db.models.team import Team  # noqa: E402
 from odds_value.db.models.venue import Venue  # noqa: E402
-from odds_value.db.models.game import Game  # noqa: E402

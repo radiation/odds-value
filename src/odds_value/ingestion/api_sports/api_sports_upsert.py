@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session
 
 from odds_value.db.enums import SeasonTypeEnum, SportEnum
 from odds_value.db.models import Game, IngestedPayload, League, Season, Team, TeamGameStats, Venue
-from odds_value.ingestion.api_sports.mappers import (
-    coerce_int, map_game_status, parse_week, stats_list_to_map,
+from odds_value.ingestion.api_sports.api_sports_mappers import (
+    coerce_int,
+    map_game_status,
+    parse_week,
+    stats_list_to_map,
 )
 from odds_value.ingestion.common.dates import (
     compute_week_from_start_time_nfl,
@@ -17,7 +20,9 @@ from odds_value.ingestion.common.dates import (
 )
 
 
-def upsert_league(session: Session, *, provider_league_id: str, name: str, sport: SportEnum) -> League:
+def upsert_league(
+    session: Session, *, provider_league_id: str, name: str, sport: SportEnum
+) -> League:
     league = session.scalar(select(League).where(League.provider_league_id == provider_league_id))
     if league:
         league.name = name
@@ -75,7 +80,9 @@ def upsert_team(
     city: str | None = None,
     nickname: str | None = None,
 ) -> Team:
-    stmt = select(Team).where(Team.league_id == league_id, Team.provider_team_id == provider_team_id)
+    stmt = select(Team).where(
+        Team.league_id == league_id, Team.provider_team_id == provider_team_id
+    )
     team = session.scalar(stmt)
     if team:
         team.name = name
@@ -220,7 +227,7 @@ def upsert_game_from_api_sports_item(
     week_raw = game_obj.get("week")
     week = parse_week(week_raw)
 
-    if week is None and league.sport == SportEnum.NFL:
+    if week is None and league.sport == SportEnum.NFL and season:
         week = compute_week_from_start_time_nfl(start_time, season_year=season.year)
 
     game = session.scalar(select(Game).where(Game.provider_game_id == provider_game_id))

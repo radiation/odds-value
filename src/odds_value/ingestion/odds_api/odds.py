@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy.orm import Session
 
 from odds_value.db.enums import SportEnum
-from odds_value.ingestion.odds_api.client import OddsApiClient
-from odds_value.ingestion.odds_api.mappers import map_event_to_snapshots
-from odds_value.ingestion.odds_api.upsert import (
-    upsert_book,
+from odds_value.ingestion.odds_api.odds_api_client import OddsApiClient
+from odds_value.ingestion.odds_api.odds_api_mappers import map_event_to_snapshots
+from odds_value.ingestion.odds_api.odds_api_upsert import (
     find_game_for_odds_event,
-    upsert_odds_snapshot,
     maybe_store_payload,
+    upsert_book,
+    upsert_odds_snapshot,
 )
 
 
@@ -29,10 +30,10 @@ def ingest_odds(
 
     Returns number of odds_snapshots inserted.
     """
-    captured_at = datetime.now(timezone.utc)
+    captured_at = datetime.now(UTC)
 
     payload = client.get(
-        f"/sports/americanfootball_nfl/odds",
+        "/sports/americanfootball_nfl/odds",
         params={
             "regions": regions,
             "markets": markets,
@@ -44,6 +45,9 @@ def ingest_odds(
     inserted = 0
 
     for event in payload:
+        if not isinstance(event, dict):
+            continue
+
         # Resolve canonical game
         game = find_game_for_odds_event(
             session,
@@ -53,13 +57,26 @@ def ingest_odds(
             commence_time_iso=event.get("commence_time", ""),
         )
         if game is None:
-            print("Resolver miss:", event["home_team"], "vs", event["away_team"], event["commence_time"])
+            print(
+                "Resolver miss:",
+                event["home_team"],
+                "vs",
+                event["away_team"],
+                event["commence_time"],
+            )
             continue
 
-        print("Resolved game:", game.id, game.start_time, game.home_team.name, "vs", game.away_team.name)
+        print(
+            "Resolved game:",
+            game.id,
+            game.start_time,
+            game.home_team.name,
+            "vs",
+            game.away_team.name,
+        )
 
         # Map event → flat snapshot rows
-        fetched_at = datetime.now(timezone.utc)
+        fetched_at = datetime.now(UTC)
         rows = map_event_to_snapshots(event, fetched_at=fetched_at)
 
         for r in rows:

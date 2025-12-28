@@ -7,14 +7,11 @@ from typing import Any, Literal
 from alembic import context
 from alembic.autogenerate.api import AutogenContext
 from alembic.operations.ops import MigrationScript
-
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.sql.type_api import TypeEngine
 
-from odds_value.db.base import Base
 import odds_value.db.models  # noqa: F401
-
+from odds_value.db.base import Base
 
 config = context.config
 
