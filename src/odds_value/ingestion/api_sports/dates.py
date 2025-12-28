@@ -32,31 +32,13 @@ def parse_api_sports_game_datetime(value: Any, *, provider_game_id: str) -> date
     raise ValueError(f"Missing/invalid game.date for provider_game_id={provider_game_id}: {value!r}")
 
 
-def labor_day(year: int) -> date:
-    """First Monday of September."""
-    d = date(year, 9, 1)
-    while d.weekday() != 0:  # Monday
-        d += timedelta(days=1)
-    return d
-
-
-def first_thursday_after_labor_day(year: int) -> date:
-    """Thursday after Labor Day."""
-    d = labor_day(year) + timedelta(days=1)
-    while d.weekday() != 3:  # Thursday
-        d += timedelta(days=1)
-    return d
-
-
-def nfl_week1_bucket_start_utc(year: int) -> datetime:
-    """
-    Stable NFL week bucketing boundary:
-    Week 1 kickoff anchor = first Thursday after Labor Day.
-    Bucket start = Tuesday 00:00 UTC of that week.
-    """
-    kickoff = first_thursday_after_labor_day(year)
-    kickoff_dt = datetime(kickoff.year, kickoff.month, kickoff.day, tzinfo=timezone.utc)
-    return kickoff_dt - timedelta(days=2)  # Tuesday 00:00 UTC
+def nfl_week1_bucket_start_utc(season_year: int) -> datetime:
+    """Compute the UTC datetime for the start of the NFL Week 1 bucket (Tue 00:00 UTC after Labor Day)."""
+    ld = date(season_year, 9, 1)
+    while ld.weekday() != 0:  # Monday
+        ld += timedelta(days=1)
+    tue = ld + timedelta(days=1)
+    return datetime(tue.year, tue.month, tue.day, tzinfo=timezone.utc)
 
 
 def in_nfl_regular_season_window(dt: datetime, season_year: int) -> bool:
@@ -66,8 +48,9 @@ def in_nfl_regular_season_window(dt: datetime, season_year: int) -> bool:
     """
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    start_window = datetime(season_year, 9, 1, tzinfo=timezone.utc)
-    end_window = datetime(season_year + 1, 2, 15, tzinfo=timezone.utc)
+    season_weeks = 18 if season_year >= 2021 else 17
+    start_window = nfl_week1_bucket_start_utc(season_year)
+    end_window = start_window + timedelta(weeks=season_weeks)
     return start_window <= dt <= end_window
 
 
