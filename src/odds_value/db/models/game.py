@@ -53,6 +53,11 @@ class Game(Base, TimestampMixin):
         cascade="all, delete-orphan",
     )
 
+    odds_snapshots: Mapped[list["OddsSnapshot"]] = relationship(
+        back_populates="game",
+        cascade="all, delete-orphan",
+    )
+
     __table_args__ = (
         Index("ix_games_league_start_time", "league_id", "start_time"),
         Index("ix_games_season_week", "season_id", "week"),
@@ -67,3 +72,4 @@ from odds_value.db.models.season import Season  # noqa: E402
 from odds_value.db.models.team import Team  # noqa: E402
 from odds_value.db.models.venue import Venue  # noqa: E402
 from odds_value.db.models.team_game_stats import TeamGameStats  # noqa: E402
+from odds_value.db.models.odds_snapshot import OddsSnapshot  # noqa: E402

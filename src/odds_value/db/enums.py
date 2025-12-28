@@ -43,3 +43,19 @@ class SurfaceTypeEnum(str, Enum):
     TURF = "TURF"
     HYBRID = "HYBRID"
     UNKNOWN = "UNKNOWN"
+
+
+class MarketTypeEnum(str, Enum):
+    SPREAD = "SPREAD"
+    TOTAL = "TOTAL"
+    MONEYLINE = "MONEYLINE"
+
+
+class SideTypeEnum(str, Enum):
+    # Spread / Moneyline
+    HOME = "HOME"
+    AWAY = "AWAY"
+
+    # Totals
+    OVER = "OVER"
+    UNDER = "UNDER"
