@@ -15,3 +15,11 @@ wheels/
 # SQLite database files
 *.db
 *.sqlite3
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
