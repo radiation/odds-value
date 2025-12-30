@@ -8,8 +8,9 @@ dependencies = [
     "typer",
     "pydantic",
     "pydantic-settings",
+    "python-dotenv",
     "sqlalchemy",
-    "psycopg[binary]",
+    "psycopg2-binary",
     "alembic",
     "httpx",
     "python-dateutil",
@@ -27,6 +28,9 @@ dev = [
 
 [project.scripts]
 odds-value = "odds_value.cli.app:app"
+
+[tool.uv]
+package = true
 
 [tool.black]
 line-length = 100

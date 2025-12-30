@@ -1,3 +1,5 @@
+import importlib
+import os
 from datetime import UTC, datetime
 
 import pytest
@@ -8,6 +10,22 @@ from sqlalchemy.pool import StaticPool
 from odds_value.db.base import Base
 from odds_value.db.enums import SportEnum
 from odds_value.db.models import League, Season
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _force_test_database_url():
+    # Force tests to use sqlite memory, no matter what shell has set
+    os.environ["DATABASE_URL"] = "sqlite+pysqlite:///:memory:"
+    os.environ.pop("DB_ECHO", None)
+
+    # If settings was already imported somewhere, reload it so the singleton picks up the env var
+    try:
+        import odds_value.core.config
+
+        importlib.reload(odds_value.core.config)
+    except Exception:
+        # If not imported yet, nothing to reload
+        pass
 
 
 @pytest.fixture()

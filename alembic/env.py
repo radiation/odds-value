@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
 from typing import Any, Literal
 
 from alembic import context
 from alembic.autogenerate.api import AutogenContext
 from alembic.operations.ops import MigrationScript
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.dialects import postgresql
 
@@ -21,6 +23,10 @@ if config.config_file_name is not None:
 
 def get_database_url() -> str:
     # Default for local/dev
+    env_path = Path(__file__).resolve().parents[1] / ".env"  # adjust if your .env lives elsewhere
+    if env_path.exists():
+        load_dotenv(env_path, override=False)
+
     return os.environ.get("DATABASE_URL", "sqlite+pysqlite:///./odds_value.db")
 
 

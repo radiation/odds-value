@@ -23,3 +23,6 @@ wheels/
 crash.log
 crash.*.log
 *.tfplan
+
+# VSCode settings
+.vscode/

@@ -8,7 +8,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     # DB
-    database_url: str = "sqlite+pysqlite:///./odds_value.db"
+    database_url: str = Field(
+        default="sqlite+pysqlite:///./odds_value.db",
+        validation_alias="DATABASE_URL",
+    )
     db_echo: bool = False
 
     # api-sports
