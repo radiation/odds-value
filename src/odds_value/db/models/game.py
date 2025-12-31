@@ -30,11 +30,7 @@ class Game(Base, TimestampMixin):
     )
 
     status: Mapped[GameStatusEnum] = mapped_column(nullable=False, default=GameStatusEnum.UNKNOWN)
-    stage: Mapped[str | None] = mapped_column(String, nullable=True)
     week: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    week_label: Mapped[str | None] = mapped_column(String, nullable=True)
-    week_source: Mapped[str | None] = mapped_column(String, nullable=True)
-    game_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_neutral_site: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

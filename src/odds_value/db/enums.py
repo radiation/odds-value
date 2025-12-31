@@ -15,13 +15,6 @@ class SportEnum(str, Enum):
     OTHER = "OTHER"
 
 
-class SeasonTypeEnum(str, Enum):
-    PRE = "PRE"
-    REG = "REG"
-    POST = "POST"
-    OTHER = "OTHER"
-
-
 class GameStatusEnum(str, Enum):
     SCHEDULED = "SCHEDULED"
     IN_PROGRESS = "IN_PROGRESS"

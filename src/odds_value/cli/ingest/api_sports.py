@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from odds_value.core.config import settings
 from odds_value.db import DatabaseConfig, create_db_engine, create_session_factory
-from odds_value.db.enums import SeasonTypeEnum, SportEnum
+from odds_value.db.enums import SportEnum
 from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
 from odds_value.ingestion.api_sports.games import (
     ingest_game_stats,
@@ -39,7 +39,6 @@ def ingest_games_cmd(
     league_name: Annotated[str, typer.Option(..., help="Human name to store (e.g., NFL)")],
     season_year: Annotated[int, typer.Option(..., help="Season year (e.g., 2024)")],
     sport: Annotated[SportEnum, typer.Option(help="Sport enum")] = SportEnum.NFL,
-    season_type: Annotated[SeasonTypeEnum | None, typer.Option(help="PRE/REG/POST")] = None,
 ) -> None:
     with _session() as session:
         client = _api_sports_client()
@@ -50,7 +49,6 @@ def ingest_games_cmd(
             league_name=league_name,
             sport=sport,
             season_year=season_year,
-            season_type=season_type,
             store_payloads=settings.store_ingested_payloads,
         )
         session.commit()
@@ -91,10 +89,6 @@ def ingest_games_with_stats_cmd(
         SportEnum,
         typer.Option(help="Sport enum"),
     ] = SportEnum.NFL,
-    season_type: Annotated[
-        SeasonTypeEnum | None,
-        typer.Option(help="PRE/REG/POST"),
-    ] = None,
 ) -> None:
     with _session() as session:
         client = _api_sports_client()
@@ -105,7 +99,6 @@ def ingest_games_with_stats_cmd(
             league_name=league_name,
             sport=sport,
             season_year=season_year,
-            season_type=season_type,
             store_payloads=settings.store_ingested_payloads,
         )
         session.commit()

@@ -6,7 +6,6 @@ from sqlalchemy import Boolean, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from odds_value.db.base import Base, TimestampMixin
-from odds_value.db.enums import SeasonTypeEnum
 
 
 class Season(Base, TimestampMixin):
@@ -23,7 +22,6 @@ class Season(Base, TimestampMixin):
     start_date: Mapped[date | None] = mapped_column(nullable=True)
     end_date: Mapped[date | None] = mapped_column(nullable=True)
 
-    season_type: Mapped[SeasonTypeEnum | None] = mapped_column(nullable=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -32,7 +30,7 @@ class Season(Base, TimestampMixin):
     games: Mapped[list[Game]] = relationship(back_populates="season")
 
     __table_args__ = (
-        UniqueConstraint("league_id", "year", "season_type", name="uq_seasons_league_year_type"),
+        UniqueConstraint("league_id", "year", name="uq_seasons_league_year"),
         Index("ix_seasons_league_active", "league_id", "is_active"),
     )
 

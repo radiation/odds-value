@@ -18,7 +18,7 @@ class Team(Base, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String, nullable=False)
     abbreviation: Mapped[str | None] = mapped_column(String, nullable=True)
-    city: Mapped[str | None] = mapped_column(String, nullable=True)
+    market: Mapped[str | None] = mapped_column(String, nullable=True)
     nickname: Mapped[str | None] = mapped_column(String, nullable=True)
     logo_url: Mapped[str | None] = mapped_column(String, nullable=True)
 

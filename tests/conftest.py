@@ -67,7 +67,6 @@ def season(db_session, league: League) -> Season:
     season = Season(
         league_id=league.id,
         year=2025,
-        season_type="REG",  # or SeasonTypeEnum.REG
     )
     db_session.add(season)
     db_session.commit()

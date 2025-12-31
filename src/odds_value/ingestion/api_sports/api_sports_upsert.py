@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from odds_value.db.enums import SeasonTypeEnum, SportEnum
+from odds_value.db.enums import SportEnum
 from odds_value.db.models import Game, IngestedPayload, League, Season, Team, TeamGameStats, Venue
 from odds_value.ingestion.api_sports.api_sports_mappers import (
     coerce_int,
@@ -18,6 +18,7 @@ from odds_value.ingestion.common.dates import (
     compute_week_from_start_time_nfl,
     parse_api_sports_game_datetime,
 )
+from odds_value.ingestion.common.utils import none_if_empty
 
 
 def upsert_league(
@@ -40,14 +41,12 @@ def upsert_season(
     *,
     league_id: int,
     year: int,
-    season_type: SeasonTypeEnum | None = None,
     name: str | None = None,
     is_active: bool | None = None,
 ) -> Season:
     stmt = select(Season).where(
         Season.league_id == league_id,
         Season.year == year,
-        Season.season_type == season_type,
     )
     season = session.scalar(stmt)
     if season:
@@ -60,7 +59,6 @@ def upsert_season(
     season = Season(
         league_id=league_id,
         year=year,
-        season_type=season_type,
         name=name,
         is_active=bool(is_active) if is_active is not None else False,
     )
@@ -77,7 +75,7 @@ def upsert_team(
     name: str,
     logo_url: str | None = None,
     abbreviation: str | None = None,
-    city: str | None = None,
+    market: str | None = None,
     nickname: str | None = None,
 ) -> Team:
     stmt = select(Team).where(
@@ -90,8 +88,8 @@ def upsert_team(
             team.logo_url = logo_url
         if abbreviation is not None:
             team.abbreviation = abbreviation
-        if city is not None:
-            team.city = city
+        if market is not None:
+            team.market = market
         if nickname is not None:
             team.nickname = nickname
         return team
@@ -102,7 +100,7 @@ def upsert_team(
         name=name,
         logo_url=logo_url,
         abbreviation=abbreviation,
-        city=city,
+        market=market,
         nickname=nickname,
         is_active=True,
     )
@@ -182,27 +180,33 @@ def upsert_game_from_api_sports_item(
     home_provider_id = str(home.get("id"))
     away_provider_id = str(away.get("id"))
 
+    home_name = none_if_empty(home.get("name"))
+    away_name = none_if_empty(away.get("name"))
+
+    if not home_name or not away_name:
+        raise ValueError(f"Missing team name in api-sports payload: game_id={provider_game_id}")
+
     home_team = upsert_team(
         session,
         league_id=league.id,
         provider_team_id=home_provider_id,
-        name=str(home.get("name") or ""),
-        logo_url=home.get("logo"),
+        name=home_name,
+        logo_url=none_if_empty(home.get("logo")),
     )
     away_team = upsert_team(
         session,
         league_id=league.id,
         provider_team_id=away_provider_id,
-        name=str(away.get("name") or ""),
-        logo_url=away.get("logo"),
+        name=away_name,
+        logo_url=none_if_empty(away.get("logo")),
     )
 
     venue_id: int | None = None
     venue_obj = game_obj.get("venue")
     if isinstance(venue_obj, dict):
         provider_venue_id = venue_obj.get("id")
-        name = str(venue_obj.get("name") or "")
-        city = venue_obj.get("city")
+        name = none_if_empty(venue_obj.get("name"))
+        city = none_if_empty(venue_obj.get("city"))
 
         if name:
             venue = upsert_venue(

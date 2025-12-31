@@ -4,10 +4,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 import typer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from odds_value.db.enums import SeasonTypeEnum, SportEnum
+from odds_value.db.enums import SportEnum
 from odds_value.db.models import Game, League, Team
 from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
 from odds_value.ingestion.api_sports.api_sports_upsert import (
@@ -39,7 +39,6 @@ def ingest_games(
     league_name: str,
     sport: SportEnum,
     season_year: int,
-    season_type: SeasonTypeEnum | None = None,
     store_payloads: bool,
 ) -> int:
     fetched_at = datetime.now(UTC)
@@ -69,7 +68,6 @@ def ingest_games(
         session,
         league_id=league.id,
         year=season_year,
-        season_type=season_type,
         name=str(season_year),
         is_active=False,
     )
@@ -107,6 +105,17 @@ def ingest_games(
         count += 1
 
     typer.echo(f"Skipped {skipped} games outside regular-season window")
+
+    min_dt, max_dt = session.execute(
+        select(func.min(Game.start_time), func.max(Game.start_time)).where(
+            Game.season_id == season.id
+        )
+    ).one()
+
+    if min_dt and max_dt:
+        season.start_date = min_dt.date()
+        season.end_date = max_dt.date()
+        session.flush()
 
     return count
 
@@ -170,7 +179,6 @@ def ingest_games_with_stats(
     league_name: str,
     sport: SportEnum,
     season_year: int,
-    season_type: SeasonTypeEnum | None,
     store_payloads: bool,
 ) -> tuple[int, int]:
     games_count = ingest_games(
@@ -180,7 +188,6 @@ def ingest_games_with_stats(
         league_name=league_name,
         sport=sport,
         season_year=season_year,
-        season_type=season_type,
         store_payloads=store_payloads,
     )
 
