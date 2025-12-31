@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+
+
+def _iso_z(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
@@ -24,4 +31,21 @@ class OddsApiClient:
 
         if not isinstance(data, dict | list):
             raise TypeError(f"Unexpected Odds API response type: {type(data)}")
-        return data  # Odds API endpoints return lists for /odds, dicts for some others
+        return data
+
+    def get_odds(self, *, sport_key: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+        data = self.get(f"/sports/{sport_key}/odds", params=params)
+        if not isinstance(data, list):
+            raise TypeError(f"Expected list for /odds; got {type(data)}")
+        return [e for e in data if isinstance(e, dict)]
+
+    def get_historical_odds(
+        self, *, sport_key: str, snapshot_at: datetime, params: dict[str, Any]
+    ) -> dict[str, Any]:
+        # returns the wrapper dict
+        merged = dict(params)
+        merged["date"] = _iso_z(snapshot_at)
+        data = self.get(f"/historical/sports/{sport_key}/odds", params=merged)
+        if not isinstance(data, dict):
+            raise TypeError(f"Expected dict wrapper for /historical/.../odds; got {type(data)}")
+        return data

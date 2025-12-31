@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from odds_value.db.base import Base, TimestampMixin
@@ -41,8 +41,23 @@ class OddsSnapshot(Base, TimestampMixin):
     book: Mapped[Book] = relationship(back_populates="odds_snapshots")
 
     __table_args__ = (
+        UniqueConstraint(
+            "game_id",
+            "book_id",
+            "market_type",
+            "side_type",
+            "captured_at",
+            name="uq_odds_snapshots_identity",
+        ),
         Index("ix_odds_snapshots_game_captured_at", "game_id", "captured_at"),
         Index("ix_odds_snapshots_book_captured_at", "book_id", "captured_at"),
+        Index(
+            "ix_odds_snapshots_game_market_side_captured_at",
+            "game_id",
+            "market_type",
+            "side_type",
+            "captured_at",
+        ),
         Index(
             "ix_odds_snapshots_lookup",
             "game_id",
@@ -50,6 +65,13 @@ class OddsSnapshot(Base, TimestampMixin):
             "market_type",
             "side_type",
             "captured_at",
+        ),
+        Index(
+            "ix_odds_snapshots_closing_by_game_market_side",
+            "game_id",
+            "market_type",
+            "side_type",
+            postgresql_where=text("is_closing = true"),
         ),
     )
 

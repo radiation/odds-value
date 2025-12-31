@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 from odds_value.db.enums import SportEnum
+from odds_value.ingestion.common.dates import parse_odds_api_datetime
 from odds_value.ingestion.odds_api.odds_api_client import OddsApiClient
 from odds_value.ingestion.odds_api.odds_api_mappers import map_event_to_snapshots
 from odds_value.ingestion.odds_api.odds_api_upsert import (
@@ -20,35 +22,36 @@ def ingest_odds(
     *,
     client: OddsApiClient,
     sport: SportEnum,
+    sport_key: str = "americanfootball_nfl",
     regions: str = "us",
     markets: str = "h2h,spreads,totals",
     days_ahead: int = 7,
     store_payloads: bool = True,
+    snapshot_at: datetime | None = None,
 ) -> int:
-    """
-    Ingest main-line odds from Odds API.
+    params = {
+        "regions": regions,
+        "markets": markets,
+        "oddsFormat": "american",
+        "dateFormat": "iso",
+    }
 
-    Returns number of odds_snapshots inserted.
-    """
-    captured_at = datetime.now(UTC)
-
-    payload = client.get(
-        "/sports/americanfootball_nfl/odds",
-        params={
-            "regions": regions,
-            "markets": markets,
-            "oddsFormat": "american",
-            "dateFormat": "iso",
-        },
-    )
+    if snapshot_at is None:
+        events = client.get_odds(sport_key=sport_key, params=params)
+        fetched_at = datetime.now(UTC)
+        payload_for_storage: dict[str, Any] | None = None
+    else:
+        wrapper = client.get_historical_odds(
+            sport_key=sport_key, snapshot_at=snapshot_at, params=params
+        )
+        fetched_at = parse_odds_api_datetime(wrapper.get("timestamp", "")) or snapshot_at
+        data = wrapper.get("data", [])
+        events = [e for e in data if isinstance(e, dict)]
+        payload_for_storage = wrapper  # (optional) store wrapper too
 
     inserted = 0
 
-    for event in payload:
-        if not isinstance(event, dict):
-            continue
-
-        # Resolve canonical game
+    for event in events:
         game = find_game_for_odds_event(
             session,
             sport=sport,
@@ -57,36 +60,13 @@ def ingest_odds(
             commence_time_iso=event.get("commence_time", ""),
         )
         if game is None:
-            print(
-                "Resolver miss:",
-                event["home_team"],
-                "vs",
-                event["away_team"],
-                event["commence_time"],
-            )
             continue
 
-        print(
-            "Resolved game:",
-            game.id,
-            game.start_time,
-            game.home_team.name,
-            "vs",
-            game.away_team.name,
-        )
-
-        # Map event → flat snapshot rows
-        fetched_at = datetime.now(UTC)
         rows = map_event_to_snapshots(event, fetched_at=fetched_at)
 
         for r in rows:
-            book = upsert_book(
-                session,
-                key=r["book_key"],
-                name=r["book_name"],
-            )
-
-            did_insert = upsert_odds_snapshot(
+            book = upsert_book(session, key=r["book_key"], name=r["book_name"])
+            if upsert_odds_snapshot(
                 session,
                 game_id=game.id,
                 book_id=book.id,
@@ -97,20 +77,29 @@ def ingest_odds(
                 price=r["price"],
                 is_closing=r["is_closing"],
                 provider=r["provider"],
-            )
-
-            if did_insert:
+            ):
                 inserted += 1
 
-        # Optional: store raw payload (same pattern as api_sports)
         maybe_store_payload(
             session,
             enabled=store_payloads,
             provider="odds-api",
-            entity_type="odds_event",
-            entity_key=str(event.get("id") or event.get("commence_time")),
-            fetched_at=captured_at,
+            entity_type="odds_event" if snapshot_at is None else "odds_event_historical",
+            entity_key=f"{event.get('id')}_{event.get('commence_time')}",
+            fetched_at=fetched_at,
             payload=event,
+        )
+
+    # optional: store wrapper once per call
+    if payload_for_storage is not None:
+        maybe_store_payload(
+            session,
+            enabled=store_payloads,
+            provider="odds-api",
+            entity_type="historical_snapshot_wrapper",
+            entity_key=str(payload_for_storage.get("timestamp")),
+            fetched_at=fetched_at,
+            payload=payload_for_storage,
         )
 
     return inserted

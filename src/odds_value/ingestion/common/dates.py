@@ -36,6 +36,26 @@ def parse_api_sports_game_datetime(value: Any, *, provider_game_id: str) -> date
     )
 
 
+def parse_odds_api_datetime(value: Any) -> datetime | None:
+    """
+    Best-effort parser for Odds API timestamps.
+
+    Uses parse_api_sports_game_datetime when possible,
+    but returns None instead of raising on bad input.
+    """
+    if value in (None, ""):
+        return None
+
+    try:
+        # Odds API uses ISO strings; pass a dummy provider id
+        return parse_api_sports_game_datetime(
+            value,
+            provider_game_id="odds-api",
+        )
+    except Exception:
+        return None
+
+
 def nfl_week1_bucket_start_utc(season_year: int) -> datetime:
     """Compute the UTC datetime for the start of the NFL Week 1 bucket (Tue 00:00 UTC after Labor Day)."""
     ld = date(season_year, 9, 1)
