@@ -31,7 +31,7 @@ class League(Base, TimestampMixin):
     __table_args__ = (Index("ix_leagues_sport_active", "sport", "is_active"),)
 
 
-from odds_value.db.models.game import Game  # noqa: E402
-from odds_value.db.models.season import Season  # noqa: E402
-from odds_value.db.models.team import Team  # noqa: E402
-from odds_value.db.models.venue import Venue  # noqa: E402
+from odds_value.db.models.core.game import Game  # noqa: E402
+from odds_value.db.models.core.season import Season  # noqa: E402
+from odds_value.db.models.core.team import Team  # noqa: E402
+from odds_value.db.models.core.venue import Venue  # noqa: E402

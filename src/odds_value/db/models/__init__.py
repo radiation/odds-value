@@ -1,12 +1,12 @@
-from odds_value.db.models.book import Book
-from odds_value.db.models.game import Game
-from odds_value.db.models.ingested_payload import IngestedPayload
-from odds_value.db.models.league import League
-from odds_value.db.models.odds_snapshot import OddsSnapshot
-from odds_value.db.models.season import Season
-from odds_value.db.models.team import Team
-from odds_value.db.models.team_game_stats import TeamGameStats
-from odds_value.db.models.venue import Venue
+from odds_value.db.models.core.game import Game
+from odds_value.db.models.core.league import League
+from odds_value.db.models.core.season import Season
+from odds_value.db.models.core.team import Team
+from odds_value.db.models.core.venue import Venue
+from odds_value.db.models.features.team_game_stats import TeamGameStats
+from odds_value.db.models.ingestion.ingested_payload import IngestedPayload
+from odds_value.db.models.odds.book import Book
+from odds_value.db.models.odds.odds_snapshot import OddsSnapshot
 
 __all__ = [
     "Book",

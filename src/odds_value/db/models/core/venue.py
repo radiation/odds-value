@@ -43,5 +43,5 @@ class Venue(Base, TimestampMixin):
     )
 
 
-from odds_value.db.models.game import Game  # noqa: E402
-from odds_value.db.models.league import League  # noqa: E402
+from odds_value.db.models.core.game import Game  # noqa: E402
+from odds_value.db.models.core.league import League  # noqa: E402

@@ -29,4 +29,4 @@ class Book(Base, TimestampMixin):
     )
 
 
-from odds_value.db.models.odds_snapshot import OddsSnapshot  # noqa: E402
+from odds_value.db.models.odds.odds_snapshot import OddsSnapshot  # noqa: E402

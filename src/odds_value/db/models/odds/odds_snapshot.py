@@ -76,5 +76,5 @@ class OddsSnapshot(Base, TimestampMixin):
     )
 
 
-from odds_value.db.models.book import Book  # noqa: E402
-from odds_value.db.models.game import Game  # noqa: E402
+from odds_value.db.models.core.game import Game  # noqa: E402
+from odds_value.db.models.odds.book import Book  # noqa: E402

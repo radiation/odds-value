@@ -74,9 +74,9 @@ class Game(Base, TimestampMixin):
     )
 
 
-from odds_value.db.models.league import League  # noqa: E402
-from odds_value.db.models.odds_snapshot import OddsSnapshot  # noqa: E402
-from odds_value.db.models.season import Season  # noqa: E402
-from odds_value.db.models.team import Team  # noqa: E402
-from odds_value.db.models.team_game_stats import TeamGameStats  # noqa: E402
-from odds_value.db.models.venue import Venue  # noqa: E402
+from odds_value.db.models.core.league import League  # noqa: E402
+from odds_value.db.models.core.season import Season  # noqa: E402
+from odds_value.db.models.core.team import Team  # noqa: E402
+from odds_value.db.models.core.venue import Venue  # noqa: E402
+from odds_value.db.models.features.team_game_stats import TeamGameStats  # noqa: E402
+from odds_value.db.models.odds.odds_snapshot import OddsSnapshot  # noqa: E402
