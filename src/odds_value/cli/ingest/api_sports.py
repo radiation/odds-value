@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from sqlalchemy.orm import Session
 
+from odds_value.cli.common import session_scope
 from odds_value.core.config import settings
-from odds_value.db import DatabaseConfig, create_db_engine, create_session_factory
 from odds_value.db.enums import SportEnum
 from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
 from odds_value.ingestion.api_sports.games import (
@@ -16,14 +15,6 @@ from odds_value.ingestion.api_sports.games import (
 )
 
 api_sports_app = typer.Typer(no_args_is_help=True)
-
-
-def _session() -> Session:
-    engine = create_db_engine(
-        DatabaseConfig(database_url=settings.database_url, echo=settings.db_echo)
-    )
-    SessionLocal = create_session_factory(engine)
-    return SessionLocal()
 
 
 def _api_sports_client() -> ApiSportsClient:
@@ -40,7 +31,7 @@ def ingest_games_cmd(
     season_year: Annotated[int, typer.Option(..., help="Season year (e.g., 2024)")],
     sport: Annotated[SportEnum, typer.Option(help="Sport enum")] = SportEnum.NFL,
 ) -> None:
-    with _session() as session:
+    with session_scope() as session:
         client = _api_sports_client()
         count = ingest_games(
             session,
@@ -59,7 +50,7 @@ def ingest_games_cmd(
 def ingest_game_stats_cmd(
     provider_game_id: str = typer.Option(..., help="api-sports game id"),
 ) -> None:
-    with _session() as session:
+    with session_scope() as session:
         client = _api_sports_client()
         updated = ingest_game_stats(
             session,
@@ -90,7 +81,7 @@ def ingest_games_with_stats_cmd(
         typer.Option(help="Sport enum"),
     ] = SportEnum.NFL,
 ) -> None:
-    with _session() as session:
+    with session_scope() as session:
         client = _api_sports_client()
         games_count, stats_rows = ingest_games_with_stats(
             session,
