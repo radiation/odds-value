@@ -14,6 +14,8 @@ dependencies = [
     "alembic",
     "httpx",
     "python-dateutil",
+    "numpy",
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]
