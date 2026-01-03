@@ -17,9 +17,7 @@ class Game(Base, TimestampMixin):
     league_id: Mapped[int] = mapped_column(
         ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False
     )
-    season_id: Mapped[int | None] = mapped_column(
-        ForeignKey("seasons.id", ondelete="SET NULL"), nullable=True
-    )
+    season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"), nullable=False)
 
     provider_game_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
 

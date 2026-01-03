@@ -23,22 +23,34 @@ class TeamGameState(Base, TimestampMixin):
     games_played: Mapped[int] = mapped_column(Integer, nullable=False)
     window_size: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    avg_points_for: Mapped[float | None]
-    avg_points_against: Mapped[float | None]
-    avg_point_diff: Mapped[float | None]
+    # Legacy, scheduled to be removed
+    avg_points_for: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    avg_points_against: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    avg_point_diff: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
 
+    # Offensive/Defensive splits
+    off_pts_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_pts_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_pts_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
+    off_diff_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_diff_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_diff_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
+    def_pa_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_pa_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_pa_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
+    def_diff_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_diff_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_diff_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    # Relationships
     team: Mapped[Team] = relationship("Team")
     game: Mapped[Game] = relationship("Game")
     season: Mapped[Season] = relationship("Season")
 
     __table_args__ = (
         UniqueConstraint("team_id", "game_id", name="uq_team_game_state_team_game"),
-        UniqueConstraint(
-            "team_id",
-            "game_id",
-            "window_size",
-            name="uq_team_game_state_team_game_window",
-        ),
         Index("ix_team_game_state_team_start_time", "team_id", "start_time"),
         Index("ix_team_game_state_game", "game_id"),
         Index("ix_team_game_state_season_week", "season_id", "week"),

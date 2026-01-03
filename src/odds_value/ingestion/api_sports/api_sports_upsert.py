@@ -234,10 +234,13 @@ def upsert_game_from_api_sports_item(
     if week is None and league.sport == SportEnum.NFL and season:
         week = compute_week_from_start_time_nfl(start_time, season_year=season.year)
 
+    if season is None:
+        raise ValueError(f"Season not found for game {game_obj.get('id')}")
+
     game = session.scalar(select(Game).where(Game.provider_game_id == provider_game_id))
     if game:
         game.league_id = league.id
-        game.season_id = season.id if season else None
+        game.season_id = season.id
         game.start_time = start_time
         game.venue_id = venue_id
         game.status = map_game_status(status_short)

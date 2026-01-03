@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from sklearn.linear_model import Ridge  # type: ignore[import-untyped]
+from sqlalchemy import func
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
@@ -35,15 +36,24 @@ def run_baseline_point_diff(
     stmt = build_training_rows_stmt(window_size=window_size)
 
     stmt = stmt.where(
-        stmt.selected_columns.home_games_played >= min_games,
-        stmt.selected_columns.away_games_played >= min_games,
+        func.coalesce(stmt.selected_columns.home_games_played, 0) >= min_games,
+        func.coalesce(stmt.selected_columns.away_games_played, 0) >= min_games,
     )
 
     rows = session.execute(stmt).mappings().all()
+    print(f"Total training rows fetched: {len(rows)}")
 
     # Split by season
     train = [r for r in rows if r["season_year"] < train_season_cutoff]
     test = [r for r in rows if r["season_year"] >= train_season_cutoff]
+
+    print(f"Training rows: {len(train)}, Test rows: {len(test)}")
+
+    if not train:
+        raise ValueError("No training rows produced — check training_data filters / joins")
+
+    if not test:
+        raise ValueError("No test rows produced — check training_data filters / joins")
 
     def extract_xy(data: Sequence[RowMapping]) -> tuple[np.ndarray, np.ndarray]:
         X = np.array([[r["diff_avg_point_diff"]] for r in data], dtype=float)

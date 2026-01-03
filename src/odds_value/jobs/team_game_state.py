@@ -44,6 +44,18 @@ def _compute_state(
     )
 
 
+def _avg_points_for(results: deque[_TeamResult]) -> float:
+    if not results:
+        return 0.0
+    return sum(r.points_for for r in results) / len(results)
+
+
+def _avg_points_against(results: deque[_TeamResult]) -> float:
+    if not results:
+        return 0.0
+    return sum(r.points_against for r in results) / len(results)
+
+
 def backfill_team_game_state(
     session: Session,
     *,
@@ -87,6 +99,14 @@ def backfill_team_game_state(
 
     windows: dict[int, deque[_TeamResult]] = defaultdict(lambda: deque(maxlen=window_size))
 
+    last3: dict[int, deque[_TeamResult]] = defaultdict(lambda: deque(maxlen=3))
+    last5: dict[int, deque[_TeamResult]] = defaultdict(lambda: deque(maxlen=5))
+
+    # season aggregates keyed by (team_id, season_id)
+    season_tot_pf: dict[tuple[int, int], int] = defaultdict(int)
+    season_tot_pa: dict[tuple[int, int], int] = defaultdict(int)
+    season_cnt: dict[tuple[int, int], int] = defaultdict(int)
+
     inserted = 0
     buffer: list[TeamGameState] = []
 
@@ -97,6 +117,22 @@ def backfill_team_game_state(
         home_window = windows[g.home_team_id]
         home_games_played, home_avg_for, home_avg_against, home_avg_diff = _compute_state(
             home_window
+        )
+        home_last3 = last3[g.home_team_id]
+        home_last5 = last5[g.home_team_id]
+
+        home_off_l3 = _avg_points_for(home_last3)
+        home_def_l3 = _avg_points_against(home_last3)
+
+        home_off_l5 = _avg_points_for(home_last5)
+        home_def_l5 = _avg_points_against(home_last5)
+
+        home_key = (g.home_team_id, g.season_id)
+        home_off_season = (
+            season_tot_pf[home_key] / season_cnt[home_key] if season_cnt[home_key] else 0.0
+        )
+        home_def_season = (
+            season_tot_pa[home_key] / season_cnt[home_key] if season_cnt[home_key] else 0.0
         )
 
         buffer.append(
@@ -111,12 +147,33 @@ def backfill_team_game_state(
                 avg_points_for=home_avg_for,
                 avg_points_against=home_avg_against,
                 avg_point_diff=home_avg_diff,
+                off_pts_l3=home_off_l3,
+                def_pa_l3=home_def_l3,
+                off_pts_l5=home_off_l5,
+                def_pa_l5=home_def_l5,
+                off_pts_season=home_off_season,
+                def_pa_season=home_def_season,
             )
         )
 
         away_window = windows[g.away_team_id]
         away_games_played, away_avg_for, away_avg_against, away_avg_diff = _compute_state(
             away_window
+        )
+        away_last3 = last3[g.away_team_id]
+        away_last5 = last5[g.away_team_id]
+
+        away_off_l3 = _avg_points_for(away_last3)
+        away_def_l3 = _avg_points_against(away_last3)
+        away_off_l5 = _avg_points_for(away_last5)
+        away_def_l5 = _avg_points_against(away_last5)
+
+        away_key = (g.away_team_id, g.season_id)
+        away_off_season = (
+            season_tot_pf[away_key] / season_cnt[away_key] if season_cnt[away_key] else 0.0
+        )
+        away_def_season = (
+            season_tot_pa[away_key] / season_cnt[away_key] if season_cnt[away_key] else 0.0
         )
 
         buffer.append(
@@ -131,6 +188,12 @@ def backfill_team_game_state(
                 avg_points_for=away_avg_for,
                 avg_points_against=away_avg_against,
                 avg_point_diff=away_avg_diff,
+                off_pts_l3=away_off_l3,
+                def_pa_l3=away_def_l3,
+                off_pts_l5=away_off_l5,
+                def_pa_l5=away_def_l5,
+                off_pts_season=away_off_season,
+                def_pa_season=away_def_season,
             )
         )
 
@@ -140,6 +203,17 @@ def backfill_team_game_state(
         windows[g.away_team_id].append(
             _TeamResult(points_for=g.away_score, points_against=g.home_score)
         )
+
+        home_key = (g.home_team_id, g.season_id)
+        away_key = (g.away_team_id, g.season_id)
+
+        season_tot_pf[home_key] += g.home_score
+        season_tot_pa[home_key] += g.away_score
+        season_cnt[home_key] += 1
+
+        season_tot_pf[away_key] += g.away_score
+        season_tot_pa[away_key] += g.home_score
+        season_cnt[away_key] += 1
 
         if idx % commit_every_games == 0:
             session.add_all(buffer)

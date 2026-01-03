@@ -76,7 +76,6 @@ def build_training_rows_stmt(*, window_size: int) -> Select[tuple[Any, ...]]:
             and_(
                 home.game_id == Game.id,
                 home.team_id == Game.home_team_id,
-                home.window_size == window_size,
             ),
         )
         .join(
@@ -84,7 +83,6 @@ def build_training_rows_stmt(*, window_size: int) -> Select[tuple[Any, ...]]:
             and_(
                 away.game_id == Game.id,
                 away.team_id == Game.away_team_id,
-                away.window_size == window_size,
             ),
         )
         .join(Season, Season.id == Game.season_id)
