@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
+from sklearn.ensemble import HistGradientBoostingRegressor  # type: ignore[import-untyped]
 from sklearn.linear_model import RidgeCV  # type: ignore[import-untyped]
 from sklearn.pipeline import Pipeline  # type: ignore[import-untyped]
 from sklearn.preprocessing import StandardScaler  # type: ignore[import-untyped]
@@ -17,21 +18,22 @@ from odds_value.analytics.training_data import build_training_rows_stmt
 
 @dataclass(frozen=True)
 class BaselineResult:
+    model_name: str
     model_mae: float
     model_rmse: float
     zero_mae: float
     zero_rmse: float
     home_mean_mae: float
     home_mean_rmse: float
-    coef: float
-    intercept: float
+    coef: float | None
+    intercept: float | None
 
 
 def run_baseline_point_diff(
     session: Session,
     *,
-    min_games: int,
     train_season_cutoff: int,
+    model_kind: str = "ridge",
 ) -> BaselineResult:
     # Pull rows
     stmt = build_training_rows_stmt()
@@ -75,9 +77,33 @@ def run_baseline_point_diff(
     home_pred = np.full_like(y_test, home_mean)
 
     # Model
-    model = Pipeline(
-        [("scaler", StandardScaler()), ("model", RidgeCV(alphas=np.logspace(-3, 3, 25)))]
-    )
+    if model_kind == "ridge":
+        model = Pipeline(
+            [("scaler", StandardScaler()), ("model", RidgeCV(alphas=np.logspace(-3, 3, 25)))]
+        )
+        model.fit(X_train, y_train)
+        model_pred = model.predict(X_test)
+
+        ridge: RidgeCV = model.named_steps["model"]
+        coef = float(ridge.coef_[0])
+        intercept = float(ridge.intercept_)
+        name = "ridgecv"
+    else:
+        model = HistGradientBoostingRegressor(
+            max_depth=3,
+            learning_rate=0.05,
+            max_iter=600,
+            min_samples_leaf=25,
+            l2_regularization=0.0,
+            early_stopping=True,
+            validation_fraction=0.15,
+            n_iter_no_change=30,
+            random_state=42,
+        )
+        coef = None
+        intercept = None
+        name = "hgb_depth3_leaf25"
+
     model.fit(X_train, y_train)
     model_pred = model.predict(X_test)
 
@@ -88,12 +114,13 @@ def run_baseline_point_diff(
         return float(math.sqrt(np.mean((y - yhat) ** 2)))
 
     return BaselineResult(
+        model_name=name,
         model_mae=mae(y_test, model_pred),
         model_rmse=rmse(y_test, model_pred),
         zero_mae=mae(y_test, zero_pred),
         zero_rmse=rmse(y_test, zero_pred),
         home_mean_mae=mae(y_test, home_pred),
         home_mean_rmse=rmse(y_test, home_pred),
-        coef=float(model.named_steps["model"].coef_[0]),
-        intercept=float(model.named_steps["model"].intercept_),
+        coef=coef,
+        intercept=intercept,
     )

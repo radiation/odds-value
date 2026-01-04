@@ -35,8 +35,8 @@ def backfill(
 
 @team_game_state_app.command("baseline")
 def baseline(
-    min_games: int = 3,
-    train_season_cutoff: int = 2018,
+    model_kind: str = "ridge",
+    train_season_cutoff: int = 2021,
 ) -> None:
     """
     Run a simple train/test baseline on point_diff using diff_avg_point_diff.
@@ -44,7 +44,7 @@ def baseline(
     with session_scope() as session:
         result = run_baseline_point_diff(
             session,
-            min_games=min_games,
+            model_kind=model_kind,
             train_season_cutoff=train_season_cutoff,
         )
 
