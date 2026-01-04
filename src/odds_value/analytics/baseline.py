@@ -50,9 +50,7 @@ def run_baseline_point_diff(
         raise ValueError("No test rows produced — check training_data filters / joins")
 
     def extract_xy(data: Sequence[RowMapping]) -> tuple[np.ndarray, np.ndarray]:
-        X = np.array(
-            [[r["matchup_edge_l3_l5"], r["matchup_edge_season"]] for r in data], dtype=float
-        )
+        X = np.array([[r["matchup_edge_l3_l5"], r["season_strength"]] for r in data], dtype=float)
         y = np.array([r["point_diff"] for r in data], dtype=float)
         return X, y
 

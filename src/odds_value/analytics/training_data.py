@@ -35,6 +35,9 @@ class GameTrainingRow:
     # difference features
     matchup_edge_l3_l5: float | None
 
+    # season features
+    season_strength: float | None
+
 
 def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
     """
@@ -48,9 +51,9 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
         (home.off_pts_l3 - away.def_pa_l5) - (away.off_pts_l3 - home.def_pa_l5)
     ).label("matchup_edge_l3_l5")
 
-    matchup_edge_season = (
-        (home.off_pts_season - away.def_pa_season) - (away.off_pts_season - home.def_pa_season)
-    ).label("matchup_edge_season")
+    season_strength = (
+        (home.off_pts_season - home.def_pa_season) - (away.off_pts_season - away.def_pa_season)
+    ).label("season_strength")
 
     stmt = (
         select(
@@ -72,7 +75,7 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
             away.def_pa_l5.label("away_def_pa_l5"),
             # Feature baseline input
             matchup_edge_l3_l5,
-            matchup_edge_season,
+            season_strength,
         )
         .select_from(Game)
         .join(Season, Season.id == Game.season_id)
@@ -106,6 +109,7 @@ def fetch_training_rows(session: Session, *, limit: int = 25) -> list[GameTraini
             away_avg_points_against=r["away_avg_points_against"],
             away_avg_point_diff=r["away_avg_point_diff"],
             matchup_edge_l3_l5=r["matchup_edge_l3_l5"],
+            season_strength=r["season_strength"],
         )
         for r in rows
     ]
