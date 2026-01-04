@@ -5,7 +5,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
-from sklearn.linear_model import Ridge  # type: ignore[import-untyped]
+from sklearn.linear_model import RidgeCV  # type: ignore[import-untyped]
+from sklearn.pipeline import Pipeline  # type: ignore[import-untyped]
+from sklearn.preprocessing import StandardScaler  # type: ignore[import-untyped]
 from sqlalchemy import func
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
@@ -50,7 +52,17 @@ def run_baseline_point_diff(
         raise ValueError("No test rows produced — check training_data filters / joins")
 
     def extract_xy(data: Sequence[RowMapping]) -> tuple[np.ndarray, np.ndarray]:
-        X = np.array([[r["matchup_edge_l3_l5"], r["season_strength"]] for r in data], dtype=float)
+        X = np.array(
+            [
+                [
+                    r["matchup_edge_l3_l5"],
+                    r["season_strength"],
+                    r["league_avg_pts_season_to_date"],
+                ]
+                for r in data
+            ],
+            dtype=float,
+        )
         y = np.array([r["point_diff"] for r in data], dtype=float)
         return X, y
 
@@ -63,7 +75,9 @@ def run_baseline_point_diff(
     home_pred = np.full_like(y_test, home_mean)
 
     # Model
-    model = Ridge(alpha=1.0)
+    model = Pipeline(
+        [("scaler", StandardScaler()), ("model", RidgeCV(alphas=np.logspace(-3, 3, 25)))]
+    )
     model.fit(X_train, y_train)
     model_pred = model.predict(X_test)
 
@@ -80,6 +94,6 @@ def run_baseline_point_diff(
         zero_rmse=rmse(y_test, zero_pred),
         home_mean_mae=mae(y_test, home_pred),
         home_mean_rmse=rmse(y_test, home_pred),
-        coef=float(model.coef_[0]),
-        intercept=float(model.intercept_),
+        coef=float(model.named_steps["model"].coef_[0]),
+        intercept=float(model.named_steps["model"].intercept_),
     )

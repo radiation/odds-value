@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Float, and_, cast, select
+from sqlalchemy import Float, and_, cast, func, select
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql import Select
 
@@ -32,11 +32,10 @@ class GameTrainingRow:
     away_avg_points_against: float | None
     away_avg_point_diff: float | None
 
-    # difference features
+    # features
     matchup_edge_l3_l5: float | None
-
-    # season features
     season_strength: float | None
+    league_avg_pts_season_to_date: float | None
 
 
 def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
@@ -55,6 +54,20 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
         (home.off_pts_season - home.def_pa_season) - (away.off_pts_season - away.def_pa_season)
     ).label("season_strength")
 
+    g2 = aliased(Game)
+
+    league_avg_pts_season_to_date = (
+        select(func.avg(cast(g2.home_score + g2.away_score, Float)))
+        .where(
+            g2.season_id == Game.season_id,
+            g2.start_time < Game.start_time,
+            g2.home_score.is_not(None),
+            g2.away_score.is_not(None),
+        )
+        .correlate(Game)
+        .scalar_subquery()
+    ).label("league_avg_pts_season_to_date")
+
     stmt = (
         select(
             Game.id.label("game_id"),
@@ -68,7 +81,7 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
             away.games_played.label("away_games_played"),
             # Target
             (cast(Game.home_score, Float) - cast(Game.away_score, Float)).label("point_diff"),
-            # Raw feature columns (optional but useful for debugging)
+            # Raw feature columns
             home.off_pts_l3.label("home_off_pts_l3"),
             home.def_pa_l5.label("home_def_pa_l5"),
             away.off_pts_l3.label("away_off_pts_l3"),
@@ -76,6 +89,7 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
             # Feature baseline input
             matchup_edge_l3_l5,
             season_strength,
+            league_avg_pts_season_to_date,
         )
         .select_from(Game)
         .join(Season, Season.id == Game.season_id)
@@ -110,6 +124,7 @@ def fetch_training_rows(session: Session, *, limit: int = 25) -> list[GameTraini
             away_avg_point_diff=r["away_avg_point_diff"],
             matchup_edge_l3_l5=r["matchup_edge_l3_l5"],
             season_strength=r["season_strength"],
+            league_avg_pts_season_to_date=float(r["league_avg_pts_season_to_date"]),
         )
         for r in rows
     ]
