@@ -61,7 +61,6 @@ def backfill_team_game_state(
     *,
     league_id: int | None = None,
     season_id: int | None = None,
-    window_size: int = 5,
     commit_every_games: int = 250,
 ) -> int:
     """
@@ -89,15 +88,9 @@ def backfill_team_game_state(
     if season_id is not None:
         game_ids_subq = game_ids_subq.where(Game.season_id == season_id)
 
-    del_stmt = (
-        delete(TeamGameState)
-        .where(TeamGameState.game_id.in_(game_ids_subq))
-        .where(TeamGameState.window_size == window_size)
-    )
+    del_stmt = delete(TeamGameState).where(TeamGameState.game_id.in_(game_ids_subq))
     session.execute(del_stmt)
     session.commit()
-
-    windows: dict[int, deque[_TeamResult]] = defaultdict(lambda: deque(maxlen=window_size))
 
     last3: dict[int, deque[_TeamResult]] = defaultdict(lambda: deque(maxlen=3))
     last5: dict[int, deque[_TeamResult]] = defaultdict(lambda: deque(maxlen=5))
@@ -114,10 +107,9 @@ def backfill_team_game_state(
         if g.home_score is None or g.away_score is None:
             continue
 
-        home_window = windows[g.home_team_id]
-        home_games_played, home_avg_for, home_avg_against, home_avg_diff = _compute_state(
-            home_window
-        )
+        home_key = (g.home_team_id, g.season_id)
+        home_games_played = season_cnt[home_key]
+
         home_last3 = last3[g.home_team_id]
         home_last5 = last5[g.home_team_id]
 
@@ -143,10 +135,6 @@ def backfill_team_game_state(
                 week=g.week,
                 start_time=g.start_time,
                 games_played=home_games_played,
-                window_size=window_size,
-                avg_points_for=home_avg_for,
-                avg_points_against=home_avg_against,
-                avg_point_diff=home_avg_diff,
                 off_pts_l3=home_off_l3,
                 def_pa_l3=home_def_l3,
                 off_pts_l5=home_off_l5,
@@ -156,10 +144,9 @@ def backfill_team_game_state(
             )
         )
 
-        away_window = windows[g.away_team_id]
-        away_games_played, away_avg_for, away_avg_against, away_avg_diff = _compute_state(
-            away_window
-        )
+        away_key = (g.away_team_id, g.season_id)
+        away_games_played = season_cnt[away_key]
+
         away_last3 = last3[g.away_team_id]
         away_last5 = last5[g.away_team_id]
 
@@ -184,10 +171,6 @@ def backfill_team_game_state(
                 week=g.week,
                 start_time=g.start_time,
                 games_played=away_games_played,
-                window_size=window_size,
-                avg_points_for=away_avg_for,
-                avg_points_against=away_avg_against,
-                avg_point_diff=away_avg_diff,
                 off_pts_l3=away_off_l3,
                 def_pa_l3=away_def_l3,
                 off_pts_l5=away_off_l5,
@@ -197,15 +180,19 @@ def backfill_team_game_state(
             )
         )
 
-        windows[g.home_team_id].append(
+        last3[g.home_team_id].append(
             _TeamResult(points_for=g.home_score, points_against=g.away_score)
         )
-        windows[g.away_team_id].append(
-            _TeamResult(points_for=g.away_score, points_against=g.home_score)
+        last5[g.home_team_id].append(
+            _TeamResult(points_for=g.home_score, points_against=g.away_score)
         )
 
-        home_key = (g.home_team_id, g.season_id)
-        away_key = (g.away_team_id, g.season_id)
+        last3[g.away_team_id].append(
+            _TeamResult(points_for=g.away_score, points_against=g.home_score)
+        )
+        last5[g.away_team_id].append(
+            _TeamResult(points_for=g.away_score, points_against=g.home_score)
+        )
 
         season_tot_pf[home_key] += g.home_score
         season_tot_pa[home_key] += g.away_score

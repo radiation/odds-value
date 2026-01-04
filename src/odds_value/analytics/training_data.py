@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import and_, select
+from sqlalchemy import Float, and_, cast, select
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql import Select
 
@@ -32,19 +32,25 @@ class GameTrainingRow:
     away_avg_points_against: float | None
     away_avg_point_diff: float | None
 
-    # matchup deltas
-    diff_avg_points_for: float | None
-    diff_avg_points_against: float | None
-    diff_avg_point_diff: float | None
+    # difference features
+    matchup_edge_l3_l5: float | None
 
 
-def build_training_rows_stmt(*, window_size: int) -> Select[tuple[Any, ...]]:
+def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
     """
     One row per game with joined home/away TeamGameState (pre-game belief).
     Filters to games with final scores and matching TeamGameState rows.
     """
     home = aliased(TeamGameState)
     away = aliased(TeamGameState)
+
+    matchup_edge_l3_l5 = (
+        (home.off_pts_l3 - away.def_pa_l5) - (away.off_pts_l3 - home.def_pa_l5)
+    ).label("matchup_edge_l3_l5")
+
+    matchup_edge_season = (
+        (home.off_pts_season - away.def_pa_season) - (away.off_pts_season - home.def_pa_season)
+    ).label("matchup_edge_season")
 
     stmt = (
         select(
@@ -55,37 +61,23 @@ def build_training_rows_stmt(*, window_size: int) -> Select[tuple[Any, ...]]:
             Game.week.label("week"),
             Game.home_team_id.label("home_team_id"),
             Game.away_team_id.label("away_team_id"),
-            # target
-            (Game.home_score - Game.away_score).label("point_diff"),
-            # belief stats
             home.games_played.label("home_games_played"),
             away.games_played.label("away_games_played"),
-            home.avg_points_for.label("home_avg_points_for"),
-            home.avg_points_against.label("home_avg_points_against"),
-            home.avg_point_diff.label("home_avg_point_diff"),
-            away.avg_points_for.label("away_avg_points_for"),
-            away.avg_points_against.label("away_avg_points_against"),
-            away.avg_point_diff.label("away_avg_point_diff"),
-            # deltas
-            (home.avg_point_diff - away.avg_point_diff).label("diff_avg_point_diff"),
-            (home.avg_points_for - away.avg_points_for).label("diff_avg_points_for"),
-            (home.avg_points_against - away.avg_points_against).label("diff_avg_points_against"),
+            # Target
+            (cast(Game.home_score, Float) - cast(Game.away_score, Float)).label("point_diff"),
+            # Raw feature columns (optional but useful for debugging)
+            home.off_pts_l3.label("home_off_pts_l3"),
+            home.def_pa_l5.label("home_def_pa_l5"),
+            away.off_pts_l3.label("away_off_pts_l3"),
+            away.def_pa_l5.label("away_def_pa_l5"),
+            # Feature baseline input
+            matchup_edge_l3_l5,
+            matchup_edge_season,
         )
-        .join(
-            home,
-            and_(
-                home.game_id == Game.id,
-                home.team_id == Game.home_team_id,
-            ),
-        )
-        .join(
-            away,
-            and_(
-                away.game_id == Game.id,
-                away.team_id == Game.away_team_id,
-            ),
-        )
+        .select_from(Game)
         .join(Season, Season.id == Game.season_id)
+        .join(home, and_(home.team_id == Game.home_team_id, home.game_id == Game.id))
+        .join(away, and_(away.team_id == Game.away_team_id, away.game_id == Game.id))
         .where(Game.home_score.is_not(None))
         .where(Game.away_score.is_not(None))
         .order_by(Game.start_time.asc(), Game.id.asc())
@@ -94,10 +86,8 @@ def build_training_rows_stmt(*, window_size: int) -> Select[tuple[Any, ...]]:
     return stmt
 
 
-def fetch_training_rows(
-    session: Session, *, window_size: int, limit: int = 25
-) -> list[GameTrainingRow]:
-    stmt = build_training_rows_stmt(window_size=window_size).limit(limit)
+def fetch_training_rows(session: Session, *, limit: int = 25) -> list[GameTrainingRow]:
+    stmt = build_training_rows_stmt().limit(limit)
     rows = session.execute(stmt).mappings().all()
 
     return [
@@ -115,9 +105,7 @@ def fetch_training_rows(
             away_avg_points_for=r["away_avg_points_for"],
             away_avg_points_against=r["away_avg_points_against"],
             away_avg_point_diff=r["away_avg_point_diff"],
-            diff_avg_points_for=r["diff_avg_points_for"],
-            diff_avg_points_against=r["diff_avg_points_against"],
-            diff_avg_point_diff=r["diff_avg_point_diff"],
+            matchup_edge_l3_l5=r["matchup_edge_l3_l5"],
         )
         for r in rows
     ]

@@ -21,7 +21,6 @@ class TeamGameState(Base, TimestampMixin):
     week: Mapped[int] = mapped_column(Integer, nullable=False)
 
     games_played: Mapped[int] = mapped_column(Integer, nullable=False)
-    window_size: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Legacy, scheduled to be removed
     avg_points_for: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
@@ -44,6 +43,7 @@ class TeamGameState(Base, TimestampMixin):
     def_diff_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
     def_diff_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
     def_diff_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
     # Relationships
     team: Mapped[Team] = relationship("Team")
     game: Mapped[Game] = relationship("Game")
@@ -54,7 +54,6 @@ class TeamGameState(Base, TimestampMixin):
         Index("ix_team_game_state_team_start_time", "team_id", "start_time"),
         Index("ix_team_game_state_game", "game_id"),
         Index("ix_team_game_state_season_week", "season_id", "week"),
-        Index("ix_team_game_state_team_window", "team_id", "window_size", "start_time"),
     )
 
 

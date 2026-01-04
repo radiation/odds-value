@@ -28,26 +28,20 @@ class BaselineResult:
 def run_baseline_point_diff(
     session: Session,
     *,
-    window_size: int,
     min_games: int,
     train_season_cutoff: int,
 ) -> BaselineResult:
     # Pull rows
-    stmt = build_training_rows_stmt(window_size=window_size)
-
+    stmt = build_training_rows_stmt()
     stmt = stmt.where(
-        func.coalesce(stmt.selected_columns.home_games_played, 0) >= min_games,
-        func.coalesce(stmt.selected_columns.away_games_played, 0) >= min_games,
+        func.coalesce(stmt.selected_columns.home_games_played, 0) >= 3,
+        func.coalesce(stmt.selected_columns.away_games_played, 0) >= 3,
     )
-
     rows = session.execute(stmt).mappings().all()
-    print(f"Total training rows fetched: {len(rows)}")
 
     # Split by season
     train = [r for r in rows if r["season_year"] < train_season_cutoff]
     test = [r for r in rows if r["season_year"] >= train_season_cutoff]
-
-    print(f"Training rows: {len(train)}, Test rows: {len(test)}")
 
     if not train:
         raise ValueError("No training rows produced — check training_data filters / joins")
@@ -56,7 +50,9 @@ def run_baseline_point_diff(
         raise ValueError("No test rows produced — check training_data filters / joins")
 
     def extract_xy(data: Sequence[RowMapping]) -> tuple[np.ndarray, np.ndarray]:
-        X = np.array([[r["diff_avg_point_diff"]] for r in data], dtype=float)
+        X = np.array(
+            [[r["matchup_edge_l3_l5"], r["matchup_edge_season"]] for r in data], dtype=float
+        )
         y = np.array([r["point_diff"] for r in data], dtype=float)
         return X, y
 

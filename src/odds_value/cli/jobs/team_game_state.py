@@ -16,7 +16,6 @@ team_game_state_app = typer.Typer(no_args_is_help=True)
 def backfill(
     league_id: Annotated[int | None, typer.Option(help="Optional league id filter")] = None,
     season_id: Annotated[int | None, typer.Option(help="Optional season id filter")] = None,
-    window_size: Annotated[int, typer.Option(help="Rolling window size (last N games)")] = 5,
     commit_every_games: Annotated[int, typer.Option(help="Commit every N games")] = 250,
 ) -> None:
     """
@@ -27,7 +26,6 @@ def backfill(
             session,
             league_id=league_id,
             season_id=season_id,
-            window_size=window_size,
             commit_every_games=commit_every_games,
         )
         session.commit()
@@ -37,7 +35,6 @@ def backfill(
 
 @team_game_state_app.command("baseline")
 def baseline(
-    window_size: int = 4,
     min_games: int = 3,
     train_season_cutoff: int = 2018,
 ) -> None:
@@ -47,7 +44,6 @@ def baseline(
     with session_scope() as session:
         result = run_baseline_point_diff(
             session,
-            window_size=window_size,
             min_games=min_games,
             train_season_cutoff=train_season_cutoff,
         )
@@ -57,14 +53,13 @@ def baseline(
 
 @team_game_state_app.command("preview-training")
 def preview_training(
-    window_size: Annotated[int, typer.Option(help="Window size to join TeamGameState rows")] = 5,
     limit: Annotated[int, typer.Option(help="Number of rows to print")] = 20,
 ) -> None:
     """
     Preview training rows used for modeling.
     """
     with session_scope() as session:
-        rows = fetch_training_rows(session, window_size=window_size, limit=limit)
+        rows = fetch_training_rows(session, limit=limit)
 
     for r in rows:
         typer.echo(str(r))
