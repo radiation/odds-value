@@ -129,7 +129,9 @@ def ingest_game_stats(
         )
 
     # Fetch team statistics for this game
-    items = client.get_response_items("/games/statistics", params={"game": provider_game_id})
+    items = client.get_response_items(
+        "/games/statistics/teams?game=", params={"id": provider_game_id}
+    )
 
     maybe_store_payload(
         session,

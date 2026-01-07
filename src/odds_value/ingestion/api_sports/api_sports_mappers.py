@@ -23,17 +23,35 @@ def map_game_status(short_code: str | None) -> GameStatusEnum:
     return GameStatusEnum.UNKNOWN
 
 
-def stats_list_to_map(stats: list[dict[str, Any]] | None) -> dict[str, Any]:
+def stats_list_to_map(stats: Any) -> dict[str, Any]:
+    """
+    Normalize api-sports stats payloads into a dict.
+
+    Supports:
+      - list[{"name": ..., "value": ...}]  (older endpoints)
+      - dict[...]                          (newer /games/statistics/teams endpoints)
+    """
     if not stats:
         return {}
 
-    out: dict[str, Any] = {}
-    for item in stats:
-        name = item.get("name")
-        val = item.get("value")
-        if isinstance(name, str) and name:
-            out[name] = val
-    return out
+    # Newer shape
+    if isinstance(stats, dict):
+        return stats
+
+    # Older shape
+    if isinstance(stats, list):
+        out: dict[str, Any] = {}
+        for item in stats:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            val = item.get("value")
+            if isinstance(name, str) and name:
+                out[name] = val
+        return out
+
+    # Unknown
+    return {}
 
 
 def coerce_int(val: Any) -> int | None:

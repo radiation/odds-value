@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from odds_value.db.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from odds_value.db.models.core.game import Game
+    from odds_value.db.models.core.team import Team
+    from odds_value.db.models.features.baseball_team_game_stats import BaseballTeamGameStats
+    from odds_value.db.models.features.football_team_game_stats import FootballTeamGameStats
 
 
 class TeamGameStats(Base, TimestampMixin):
@@ -18,24 +23,24 @@ class TeamGameStats(Base, TimestampMixin):
     team_id: Mapped[int] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
     is_home: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
-    stats_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON().with_variant(JSONB, "postgresql"),
-        nullable=False,
-    )
-
-    # Convenience fields
-    points: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    yards_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    turnovers: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     game: Mapped[Game] = relationship(back_populates="team_stats")
     team: Mapped[Team] = relationship(back_populates="team_game_stats")
 
-    __table_args__ = (
-        UniqueConstraint("game_id", "team_id", name="uq_team_game_stats_game_team"),
-        Index("ix_team_game_stats_team_game", "team_id", "game_id"),
+    football: Mapped[FootballTeamGameStats | None] = relationship(
+        back_populates="base",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    baseball: Mapped[BaseballTeamGameStats | None] = relationship(
+        back_populates="base",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
-
-from odds_value.db.models.core.game import Game  # noqa: E402
-from odds_value.db.models.core.team import Team  # noqa: E402
+    __table_args__ = (
+        UniqueConstraint("game_id", "team_id", name="uq_team_game_stats_game_team"),
+        Index("ix_tgs_game_id", "game_id"),
+        Index("ix_tgs_team_id", "team_id"),
+    )

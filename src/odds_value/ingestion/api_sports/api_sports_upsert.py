@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from odds_value.db.enums import SportEnum
 from odds_value.db.models import Game, IngestedPayload, League, Season, Team, TeamGameStats, Venue
+from odds_value.db.models.features.baseball_team_game_stats import BaseballTeamGameStats
+from odds_value.db.models.features.football_team_game_stats import FootballTeamGameStats
 from odds_value.ingestion.api_sports.api_sports_mappers import (
     coerce_int,
     map_game_status,
@@ -280,38 +282,81 @@ def upsert_team_game_stats(
     is_home: bool,
     stats: list[dict[str, Any]] | None,
 ) -> TeamGameStats:
-    stats_map = stats_list_to_map(stats)
+    # Base row
+    score = game.home_score if is_home else game.away_score
 
-    yards_total = coerce_int(stats_map.get("Total Yards"))
-    turnovers = coerce_int(stats_map.get("Turnovers"))
-
-    points = game.home_score if is_home else game.away_score
-
-    stmt = select(TeamGameStats).where(
+    base_stmt = select(TeamGameStats).where(
         TeamGameStats.game_id == game.id,
         TeamGameStats.team_id == team.id,
     )
-    row = session.scalar(stmt)
-    if row:
-        row.is_home = is_home
-        row.stats_json = stats_map
-        row.points = points
-        row.yards_total = yards_total
-        row.turnovers = turnovers
-        return row
+    base = session.scalar(base_stmt)
+    if base:
+        base.is_home = is_home
+        base.score = score
+    else:
+        base = TeamGameStats(
+            game_id=game.id,
+            team_id=team.id,
+            is_home=is_home,
+            score=score,
+        )
+        session.add(base)
+        session.flush()
 
-    row = TeamGameStats(
-        game_id=game.id,
-        team_id=team.id,
-        is_home=is_home,
-        stats_json=stats_map,
-        points=points,
-        yards_total=yards_total,
-        turnovers=turnovers,
-    )
-    session.add(row)
+    # Determine sport
+    sport = session.scalar(select(League.sport).where(League.id == game.league_id))
+    if sport is None:
+        return base
+
+    # Sport-specific extension row
+    stats_map = stats_list_to_map(stats)  # returns dict[str, Any]
+
+    def get_dict(d: dict[str, Any], key: str) -> dict[str, Any]:
+        v = d.get(key)
+        return v if isinstance(v, dict) else {}
+
+    if sport == SportEnum.NFL:
+        yards_total = coerce_int(get_dict(stats_map, "yards").get("total"))
+        turnovers = coerce_int(get_dict(stats_map, "turnovers").get("total"))
+
+        nfl_ext = session.get(FootballTeamGameStats, base.id)
+        if nfl_ext:
+            nfl_ext.yards_total = yards_total
+            nfl_ext.turnovers = turnovers
+            nfl_ext.stats_json = stats_map
+        else:
+            session.add(
+                FootballTeamGameStats(
+                    team_game_stats_id=base.id,
+                    yards_total=yards_total,
+                    turnovers=turnovers,
+                    stats_json=stats_map,
+                )
+            )
+
+    elif sport == SportEnum.MLB:
+        hits = coerce_int(get_dict(stats_map, "hits").get("total"))
+        errors = coerce_int(get_dict(stats_map, "errors").get("total"))
+
+        mlb_ext = session.get(BaseballTeamGameStats, base.id)
+        if mlb_ext:
+            mlb_ext.hits = hits
+            mlb_ext.errors = errors
+            mlb_ext.stats_json = stats_map
+        else:
+            session.add(
+                BaseballTeamGameStats(
+                    team_game_stats_id=base.id,
+                    hits=hits,
+                    errors=errors,
+                    stats_json=stats_map,
+                )
+            )
+
+    # else: other sports no-op for now
+
     session.flush()
-    return row
+    return base
 
 
 def maybe_store_payload(

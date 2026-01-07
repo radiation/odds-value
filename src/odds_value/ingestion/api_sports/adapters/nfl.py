@@ -5,7 +5,6 @@ from typing import Any
 
 from odds_value.db.enums import SportEnum
 from odds_value.ingestion.api_sports.adapters.base import ApiSportsAdapter
-from odds_value.ingestion.api_sports.games import is_regular_season_game
 from odds_value.ingestion.common.dates import (
     compute_week_from_start_time_nfl,
     in_nfl_regular_season_window,
@@ -19,9 +18,7 @@ class NflAdapter(ApiSportsAdapter):
     def is_in_scope_game(
         self, item: dict[str, Any], *, season_year: int, start_time_utc: datetime
     ) -> bool:
-        if not in_nfl_regular_season_window(dt=start_time_utc, season_year=season_year):
-            return False
-        return is_regular_season_game(item)
+        return in_nfl_regular_season_window(dt=start_time_utc, season_year=season_year)
 
     def compute_week(
         self,
