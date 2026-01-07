@@ -23,7 +23,7 @@ class TeamGameStats(Base, TimestampMixin):
         nullable=False,
     )
 
-    # Convenience fields (optional but useful)
+    # Convenience fields
     points: Mapped[int | None] = mapped_column(Integer, nullable=True)
     yards_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     turnovers: Mapped[int | None] = mapped_column(Integer, nullable=True)

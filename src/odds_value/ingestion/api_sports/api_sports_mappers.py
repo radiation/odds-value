@@ -1,49 +1,8 @@
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from odds_value.db.enums import GameStatusEnum
-
-_WEEK_RE = re.compile(r"week\s*(\d+)", re.IGNORECASE)
-
-
-def parse_week(value: Any) -> int | None:
-    """
-    Parse api-sports week values.
-
-    Handles:
-      - 1
-      - "1"
-      - "Week 1"
-      - "WEEK 12"
-      - None / non-week strings
-
-    Returns int or None.
-    """
-    if value is None:
-        return None
-
-    # Already numeric
-    if isinstance(value, int):
-        return value
-
-    if isinstance(value, str):
-        s = value.strip()
-
-        # Direct numeric string
-        if s.isdigit():
-            return int(s)
-
-        # "Week X" pattern
-        match = _WEEK_RE.search(s)
-        if match:
-            try:
-                return int(match.group(1))
-            except ValueError:
-                return None
-
-    return None
 
 
 def map_game_status(short_code: str | None) -> GameStatusEnum:

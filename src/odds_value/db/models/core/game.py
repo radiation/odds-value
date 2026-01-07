@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from odds_value.db.base import Base, TimestampMixin
@@ -19,7 +19,7 @@ class Game(Base, TimestampMixin):
     )
     season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"), nullable=False)
 
-    provider_game_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    provider_game_id: Mapped[str] = mapped_column(String, nullable=False)
 
     start_time: Mapped[datetime] = mapped_column(nullable=False)
 
@@ -28,7 +28,7 @@ class Game(Base, TimestampMixin):
     )
 
     status: Mapped[GameStatusEnum] = mapped_column(nullable=False, default=GameStatusEnum.UNKNOWN)
-    week: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    week: Mapped[int | None] = mapped_column(Integer, nullable=True)  # NFL specific
     is_neutral_site: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -64,8 +64,9 @@ class Game(Base, TimestampMixin):
     )
 
     __table_args__ = (
+        UniqueConstraint("league_id", "provider_game_id", name="uq_games_league_provider_game_id"),
         Index("ix_games_league_start_time", "league_id", "start_time"),
-        Index("ix_games_season_week", "season_id", "week"),
+        Index("ix_games_season_start_time", "season_id", "start_time"),
         Index("ix_games_home_team", "home_team_id"),
         Index("ix_games_away_team", "away_team_id"),
         Index("ix_games_venue_start_time", "venue_id", "start_time"),

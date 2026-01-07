@@ -1,7 +1,48 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+
+_WEEK_RE = re.compile(r"week\s*(\d+)", re.IGNORECASE)
+
+
+def parse_nfl_week(value: Any) -> int | None:
+    """
+    Parse api-sports week values.
+
+    Handles:
+      - 1
+      - "1"
+      - "Week 1"
+      - "WEEK 12"
+      - None / non-week strings
+
+    Returns int or None.
+    """
+    if value is None:
+        return None
+
+    # Already numeric
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, str):
+        s = value.strip()
+
+        # Direct numeric string
+        if s.isdigit():
+            return int(s)
+
+        # "Week X" pattern
+        match = _WEEK_RE.search(s)
+        if match:
+            try:
+                return int(match.group(1))
+            except ValueError:
+                return None
+
+    return None
 
 
 def parse_api_sports_game_datetime(value: Any, *, provider_game_id: str) -> datetime:

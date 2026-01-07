@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from odds_value.db.enums import SportEnum
 from odds_value.db.models import Game, League, Team
+from odds_value.ingestion.api_sports.adapters import get_adapter
 from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
 from odds_value.ingestion.api_sports.api_sports_upsert import (
     maybe_store_payload,
@@ -17,10 +18,7 @@ from odds_value.ingestion.api_sports.api_sports_upsert import (
     upsert_season,
     upsert_team_game_stats,
 )
-from odds_value.ingestion.common.dates import (
-    in_nfl_regular_season_window,
-    parse_api_sports_game_datetime,
-)
+from odds_value.ingestion.common.dates import parse_api_sports_game_datetime
 
 
 def is_regular_season_game(item: dict[str, Any]) -> bool:
@@ -75,6 +73,8 @@ def ingest_games(
     count = 0
     skipped = 0
 
+    adapter = get_adapter(sport)
+
     for item in items:
         game_obj = item.get("game") or {}
         provider_game_id = str(game_obj.get("id"))
@@ -85,13 +85,7 @@ def ingest_games(
             provider_game_id=provider_game_id,
         )
 
-        # Skip preseason reliably even when stage is missing
-        if sport == SportEnum.NFL and not in_nfl_regular_season_window(start_time, season_year):
-            skipped += 1
-            continue
-
-        # Optional: keep your stage-based filter too (harmless)
-        if not is_regular_season_game(item):
+        if not adapter.is_in_scope_game(item, season_year=season_year, start_time_utc=start_time):
             skipped += 1
             continue
 
@@ -124,12 +118,11 @@ def ingest_game_stats(
     session: Session,
     *,
     client: ApiSportsClient,
-    provider_game_id: str,
+    game: Game,
     store_payloads: bool,
 ) -> int:
     fetched_at = datetime.now(UTC)
-
-    game = session.scalar(select(Game).where(Game.provider_game_id == str(provider_game_id)))
+    provider_game_id = game.provider_game_id
     if not game:
         raise ValueError(
             f"Game not found for provider_game_id={provider_game_id}. Ingest games first."
@@ -191,7 +184,6 @@ def ingest_games_with_stats(
         store_payloads=store_payloads,
     )
 
-    # Now pull stats for every game we just ingested for that league/season
     games = session.scalars(
         select(Game).where(
             Game.league_id
@@ -206,7 +198,7 @@ def ingest_games_with_stats(
         stats_rows += ingest_game_stats(
             session,
             client=client,
-            provider_game_id=g.provider_game_id,
+            game=g,
             store_payloads=store_payloads,
         )
 

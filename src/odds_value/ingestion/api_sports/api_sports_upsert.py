@@ -11,12 +11,12 @@ from odds_value.db.models import Game, IngestedPayload, League, Season, Team, Te
 from odds_value.ingestion.api_sports.api_sports_mappers import (
     coerce_int,
     map_game_status,
-    parse_week,
     stats_list_to_map,
 )
 from odds_value.ingestion.common.dates import (
     compute_week_from_start_time_nfl,
     parse_api_sports_game_datetime,
+    parse_nfl_week,
 )
 from odds_value.ingestion.common.utils import none_if_empty
 
@@ -229,7 +229,7 @@ def upsert_game_from_api_sports_item(
             away_score = coerce_int(a.get("total"))
 
     week_raw = game_obj.get("week")
-    week = parse_week(week_raw)
+    week = parse_nfl_week(week_raw)
 
     if week is None and league.sport == SportEnum.NFL and season:
         week = compute_week_from_start_time_nfl(start_time, season_year=season.year)
