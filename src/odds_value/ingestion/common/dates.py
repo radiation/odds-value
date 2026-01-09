@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
+ET = ZoneInfo("America/New_York")
 _WEEK_RE = re.compile(r"week\s*(\d+)", re.IGNORECASE)
 
 
@@ -97,41 +99,46 @@ def parse_odds_api_datetime(value: Any) -> datetime | None:
         return None
 
 
-def nfl_week1_bucket_start_utc(season_year: int) -> datetime:
-    """Compute the UTC datetime for the start of the NFL Week 1 bucket (Tue 00:00 UTC after Labor Day)."""
+def nfl_week1_bucket_start_et(season_year: int) -> datetime:
+    """
+    Start of Week 1 bucket in ET: Tuesday 00:00 ET after Labor Day.
+    (Labor Day = first Monday in September.)
+    """
     ld = date(season_year, 9, 1)
     while ld.weekday() != 0:  # Monday
         ld += timedelta(days=1)
     tue = ld + timedelta(days=1)
-    return datetime(tue.year, tue.month, tue.day, tzinfo=UTC)
+    return datetime(tue.year, tue.month, tue.day, tzinfo=ET)
 
 
 def in_nfl_regular_season_window(dt: datetime, season_year: int) -> bool:
     """
-    Date-window filter to exclude preseason even when stage/week is missing.
-    (Covers regular season + playoffs)
+    Regular season window in ET buckets (preseason excluded).
     """
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
+        dt = dt.replace(tzinfo=UTC)  # treat naive as UTC
+    dt_et = dt.astimezone(ET)
+
     season_weeks = 18 if season_year >= 2021 else 17
-    start_window = nfl_week1_bucket_start_utc(season_year)
+    start_window = nfl_week1_bucket_start_et(season_year)
     end_window = start_window + timedelta(weeks=season_weeks)
-    return start_window <= dt <= end_window
+    return start_window <= dt_et <= end_window
 
 
 def compute_week_from_start_time_nfl(dt: datetime, season_year: int) -> int | None:
     """
-    Compute NFL week number using Tue→Mon buckets from Week 1 anchor.
-    Returns None if dt is outside regular season window.
+    Compute NFL week number using Tue→Mon buckets in ET.
+    Fixes MNF UTC-midnight rollover.
     """
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
+        dt = dt.replace(tzinfo=UTC)  # treat naive as UTC
+    dt_et = dt.astimezone(ET)
 
-    if not in_nfl_regular_season_window(dt, season_year):
+    if not in_nfl_regular_season_window(dt_et, season_year):
         return None
 
-    week1_start = nfl_week1_bucket_start_utc(season_year)
-    delta_days = (dt - week1_start).days
+    week1_start = nfl_week1_bucket_start_et(season_year)
+    delta_days = (dt_et - week1_start).days
     if delta_days < 0:
         return None
     return 1 + (delta_days // 7)

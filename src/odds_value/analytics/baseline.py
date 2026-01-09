@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import NDArray
 from sklearn.ensemble import HistGradientBoostingRegressor  # type: ignore[import-untyped]
 from sklearn.linear_model import RidgeCV  # type: ignore[import-untyped]
 from sklearn.pipeline import Pipeline  # type: ignore[import-untyped]
@@ -14,6 +15,8 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
 from odds_value.analytics.training_data import build_training_rows_stmt
+
+ArrayF64 = NDArray[np.float64]
 
 
 @dataclass(frozen=True)
@@ -53,7 +56,7 @@ def run_baseline_point_diff(
     if not test:
         raise ValueError("No test rows produced — check training_data filters / joins")
 
-    def extract_xy(data: Sequence[RowMapping]) -> tuple[np.ndarray, np.ndarray]:
+    def extract_xy(data: Sequence[RowMapping]) -> tuple[ArrayF64, ArrayF64]:
         X = np.array(
             [
                 [
@@ -107,10 +110,10 @@ def run_baseline_point_diff(
     model.fit(X_train, y_train)
     model_pred = model.predict(X_test)
 
-    def mae(y: np.ndarray, yhat: np.ndarray) -> float:
+    def mae(y: ArrayF64, yhat: ArrayF64) -> float:
         return float(np.mean(np.abs(y - yhat)))
 
-    def rmse(y: np.ndarray, yhat: np.ndarray) -> float:
+    def rmse(y: ArrayF64, yhat: ArrayF64) -> float:
         return float(math.sqrt(np.mean((y - yhat) ** 2)))
 
     return BaselineResult(

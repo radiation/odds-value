@@ -160,7 +160,7 @@ def upsert_game_from_api_sports_item(
     season: Season | None,
     item: dict[str, Any],
     source_last_seen_at: datetime,
-) -> Game:
+) -> Game | None:
     game_obj = item.get("game") or item.get("fixture") or {}
     teams_obj = item.get("teams") or {}
     scores_obj = item.get("scores") or {}
@@ -233,11 +233,19 @@ def upsert_game_from_api_sports_item(
     week_raw = game_obj.get("week")
     week = parse_nfl_week(week_raw)
 
-    if week is None and league.sport == SportEnum.NFL and season:
-        week = compute_week_from_start_time_nfl(start_time, season_year=season.year)
+    if league.sport == SportEnum.NFL and season and start_time:
+        computed = compute_week_from_start_time_nfl(start_time, season_year=season.year)
+        if computed is not None:
+            if week is not None and week != computed:
+                print(
+                    f"Overriding NFL week from provider with computed week: provider_week={week}, computed_week={computed}, provider_game_id={provider_game_id}"
+                )
+            week = computed
+        else:
+            return None
 
     if season is None:
-        raise ValueError(f"Season not found for game {game_obj.get('id')}")
+        return None
 
     game = session.scalar(select(Game).where(Game.provider_game_id == provider_game_id))
     if game:
