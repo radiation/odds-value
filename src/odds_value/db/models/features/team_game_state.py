@@ -36,6 +36,14 @@ class TeamGameState(Base, TimestampMixin):
     off_diff_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
     off_diff_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
 
+    off_yards_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_yards_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_yards_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
+    off_turnovers_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_turnovers_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    off_turnovers_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
     def_pa_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
     def_pa_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
     def_pa_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
@@ -43,6 +51,14 @@ class TeamGameState(Base, TimestampMixin):
     def_diff_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
     def_diff_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
     def_diff_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
+    def_yards_allowed_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_yards_allowed_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_yards_allowed_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+
+    def_takeaways_l3: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_takeaways_l5: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
+    def_takeaways_season: Mapped[float | None] = mapped_column(nullable=False, default=0.0)
 
     # Relationships
     team: Mapped[Team] = relationship("Team")

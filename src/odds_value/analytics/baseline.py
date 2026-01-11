@@ -50,6 +50,7 @@ def run_baseline_point_diff(
     train = [r for r in rows if r["season_year"] < train_season_cutoff]
     test = [r for r in rows if r["season_year"] >= train_season_cutoff]
 
+    print(f"Training rows {len(rows)}: {len(train)}, test rows: {len(test)}")
     if not train:
         raise ValueError("No training rows produced — check training_data filters / joins")
 
@@ -61,6 +62,8 @@ def run_baseline_point_diff(
             [
                 [
                     r["matchup_edge_l3_l5"],
+                    r["yards_edge_l3_l5"],
+                    r["turnover_edge_l3_l5"],
                     r["season_strength"],
                     r["league_avg_pts_season_to_date"],
                 ]
@@ -68,7 +71,26 @@ def run_baseline_point_diff(
             ],
             dtype=float,
         )
+        if not np.isfinite(X).all():
+            bad = np.argwhere(~np.isfinite(X))
+            i, j = bad[0]
+            raise ValueError(
+                f"Non-finite value in X at row {i}, col {j}: {X[i, j]!r}. "
+                f"Row keys: matchup={data[i].get('matchup_edge_l3_l5')}, "
+                f"yards={data[i].get('yards_edge_l3_l5')}, "
+                f"to={data[i].get('turnover_edge_l3_l5')}, "
+                f"season_strength={data[i].get('season_strength')}, "
+                f"league_avg={data[i].get('league_avg_pts_season_to_date')}"
+            )
         y = np.array([r["point_diff"] for r in data], dtype=float)
+        print("X shape:", X.shape)
+        print("X abs max:", np.max(np.abs(X), axis=0))
+        print("X abs max overall:", np.max(np.abs(X)))
+
+        u, s, vt = np.linalg.svd(X, full_matrices=False)
+        print("singular values:", s[:10], "...", s[-3:])
+        print("condition number:", s[0] / s[-1])
+
         return X, y
 
     X_train, y_train = extract_xy(train)
@@ -82,10 +104,16 @@ def run_baseline_point_diff(
     # Model
     if model_kind == "ridge":
         model = Pipeline(
-            [("scaler", StandardScaler()), ("model", RidgeCV(alphas=np.logspace(-3, 3, 25)))]
+            [
+                ("scaler", StandardScaler()),
+                ("model", RidgeCV(alphas=np.logspace(-2, 3, 30), gcv_mode="eigen")),
+            ]
         )
         model.fit(X_train, y_train)
         model_pred = model.predict(X_test)
+
+        print("alphas:", model.named_steps["model"].alphas)
+        print("alpha_:", model.named_steps["model"].alpha_)
 
         ridge: RidgeCV = model.named_steps["model"]
         coef = float(ridge.coef_[0])

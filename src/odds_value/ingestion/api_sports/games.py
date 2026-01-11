@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from odds_value.db.enums import SportEnum
-from odds_value.db.models import Game, League, Team
+from odds_value.db.models import Game, Team
 from odds_value.ingestion.api_sports.adapters import get_adapter
 from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
 from odds_value.ingestion.api_sports.api_sports_upsert import (
@@ -38,7 +38,7 @@ def ingest_games(
     sport: SportEnum,
     season_year: int,
     store_payloads: bool,
-) -> int:
+) -> list[int]:
     fetched_at = datetime.now(UTC)
 
     # Fetch games list
@@ -70,10 +70,11 @@ def ingest_games(
         is_active=False,
     )
 
-    count = 0
     skipped = 0
 
     adapter = get_adapter(sport)
+
+    game_ids: list[int] = []
 
     for item in items:
         game_obj = item.get("game") or {}
@@ -89,14 +90,22 @@ def ingest_games(
             skipped += 1
             continue
 
-        upsert_game_from_api_sports_item(
+        game = upsert_game_from_api_sports_item(
             session,
             league=league,
             season=season,
             item=item,
             source_last_seen_at=fetched_at,
         )
-        count += 1
+        if game:
+            game_ids.append(game.id)
+        else:
+            typer.echo(f"Warning: failed to upsert game for provider_game_id={provider_game_id}")
+
+        if len(game_ids) % 16 == 0:
+            typer.echo(
+                f"Ingested {len(game_ids)} games for league={provider_league_id}, season={season_year}"
+            )
 
     typer.echo(f"Skipped {skipped} games outside regular-season window")
 
@@ -111,7 +120,7 @@ def ingest_games(
         season.end_date = max_dt.date()
         session.flush()
 
-    return count
+    return game_ids
 
 
 def ingest_game_stats(
@@ -157,12 +166,16 @@ def ingest_game_stats(
             )
         )
         if not team:
+            typer.echo(
+                f"Warning: team not found for provider_team_id={provider_team_id} in game id={provider_game_id}. Skipping stats upsert."
+            )
             continue
 
         is_home = team.id == game.home_team_id
         upsert_team_game_stats(session, game=game, team=team, is_home=is_home, stats=stats_list)
         updated += 1
 
+    typer.echo(f"Upserted team_game_stats for {updated} teams for game id={provider_game_id}")
     return updated
 
 
@@ -176,7 +189,7 @@ def ingest_games_with_stats(
     season_year: int,
     store_payloads: bool,
 ) -> tuple[int, int]:
-    games_count = ingest_games(
+    game_ids = ingest_games(
         session,
         client=client,
         provider_league_id=provider_league_id,
@@ -186,22 +199,19 @@ def ingest_games_with_stats(
         store_payloads=store_payloads,
     )
 
-    games = session.scalars(
-        select(Game).where(
-            Game.league_id
-            == session.scalar(
-                select(League.id).where(League.provider_league_id == provider_league_id)
-            )
-        )
-    ).all()
+    games = session.scalars(select(Game).where(Game.id.in_(game_ids))).all()
+    total_games = len(games)
+
+    typer.echo(f"{total_games} games found in DB for statistics ingestion...")
 
     stats_rows = 0
-    for g in games:
+    for i, g in enumerate(games, start=1):
         stats_rows += ingest_game_stats(
             session,
             client=client,
             game=g,
             store_payloads=store_payloads,
         )
+        typer.echo(f"Processed {i}/{total_games} game statistics rows...")
 
-    return games_count, stats_rows
+    return len(game_ids), stats_rows
