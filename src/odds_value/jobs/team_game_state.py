@@ -2,11 +2,132 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
+from typing import Any
+from typing import cast as tcast
 
-from sqlalchemy import delete, select
+from sqlalchemy import Float, and_, cast, delete, func, select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from odds_value.db.models import Game, TeamGameState
+from odds_value.db.models.features.football_team_game_stats import FootballTeamGameStats
+from odds_value.db.models.features.team_game_stats import TeamGameStats
+
+
+def backfill_team_game_state_avg_points(session: Session) -> None:
+    tgs = TeamGameState.__table__
+    denom = func.nullif(cast(tgs.c.games_played, Float), 0.0)
+
+    stmt = (
+        update(tcast(Any, tgs))
+        .values(
+            avg_points_for=cast(tgs.c.off_pts_season, Float) / denom,
+            avg_points_against=cast(tgs.c.def_pa_season, Float) / denom,
+            avg_point_diff=(
+                (cast(tgs.c.off_pts_season, Float) / denom)
+                - (cast(tgs.c.def_pa_season, Float) / denom)
+            ),
+        )
+        .where(tgs.c.games_played > 0)
+    )
+
+    session.execute(stmt)
+    session.commit()
+
+
+def backfill_team_game_state_football_rollups(session: Session) -> None:
+    tgs = TeamGameStats.__table__
+    ftgs = FootballTeamGameStats.__table__
+    g = Game.__table__
+    tgs_opp = tgs.alias("tgs_opp")
+    ftgs_opp = ftgs.alias("ftgs_opp")
+    tgs_state = TeamGameState.__table__
+
+    # base CTE: one row per team-game with opponent stats attached
+    base = (
+        select(
+            g.c.id.label("game_id"),
+            g.c.season_id.label("season_id"),
+            g.c.start_time.label("start_time"),
+            tgs.c.team_id.label("team_id"),
+            ftgs.c.yards_total.label("off_yards"),
+            ftgs.c.turnovers.label("off_turnovers"),
+            ftgs_opp.c.yards_total.label("def_yards_allowed"),
+            ftgs_opp.c.turnovers.label("def_takeaways"),
+        )
+        .select_from(tgs)
+        .join(ftgs, ftgs.c.team_game_stats_id == tgs.c.id)
+        .join(g, g.c.id == tgs.c.game_id)
+        .join(
+            tgs_opp,
+            and_(
+                tgs_opp.c.game_id == tgs.c.game_id,
+                tgs_opp.c.team_id != tgs.c.team_id,
+            ),
+        )
+        .join(ftgs_opp, ftgs_opp.c.team_game_stats_id == tgs_opp.c.id)
+        .cte("base")
+    )
+
+    def wsum(col: ColumnElement[Any], n: int | None) -> ColumnElement[float]:
+        """
+        n=None -> season-to-date (unbounded preceding), always excluding current row (1 preceding)
+        n=3/5 -> rolling windows excluding current row
+        """
+        frame = (-n, -1) if n else (None, -1)
+
+        return func.coalesce(
+            func.sum(col).over(
+                partition_by=(base.c.team_id, base.c.season_id),
+                order_by=base.c.start_time,
+                rows=frame,
+            ),
+            0.0,
+        )
+
+    roll = select(
+        base.c.game_id,
+        base.c.team_id,
+        wsum(base.c.off_yards, 3).label("off_yards_l3"),
+        wsum(base.c.off_yards, 5).label("off_yards_l5"),
+        wsum(base.c.off_yards, None).label("off_yards_season"),
+        wsum(base.c.off_turnovers, 3).label("off_turnovers_l3"),
+        wsum(base.c.off_turnovers, 5).label("off_turnovers_l5"),
+        wsum(base.c.off_turnovers, None).label("off_turnovers_season"),
+        wsum(base.c.def_yards_allowed, 3).label("def_yards_allowed_l3"),
+        wsum(base.c.def_yards_allowed, 5).label("def_yards_allowed_l5"),
+        wsum(base.c.def_yards_allowed, None).label("def_yards_allowed_season"),
+        wsum(base.c.def_takeaways, 3).label("def_takeaways_l3"),
+        wsum(base.c.def_takeaways, 5).label("def_takeaways_l5"),
+        wsum(base.c.def_takeaways, None).label("def_takeaways_season"),
+    ).cte("roll")
+
+    stmt = (
+        update(tcast(Any, tgs_state))
+        .where(
+            and_(
+                tgs_state.c.game_id == roll.c.game_id,
+                tgs_state.c.team_id == roll.c.team_id,
+            )
+        )
+        .values(
+            off_yards_l3=roll.c.off_yards_l3,
+            off_yards_l5=roll.c.off_yards_l5,
+            off_yards_season=roll.c.off_yards_season,
+            off_turnovers_l3=roll.c.off_turnovers_l3,
+            off_turnovers_l5=roll.c.off_turnovers_l5,
+            off_turnovers_season=roll.c.off_turnovers_season,
+            def_yards_allowed_l3=roll.c.def_yards_allowed_l3,
+            def_yards_allowed_l5=roll.c.def_yards_allowed_l5,
+            def_yards_allowed_season=roll.c.def_yards_allowed_season,
+            def_takeaways_l3=roll.c.def_takeaways_l3,
+            def_takeaways_l5=roll.c.def_takeaways_l5,
+            def_takeaways_season=roll.c.def_takeaways_season,
+        )
+    )
+
+    session.execute(stmt)
+    session.commit()
 
 
 @dataclass(frozen=True)
@@ -120,12 +241,8 @@ def backfill_team_game_state(
         home_def_l5 = _avg_points_against(home_last5)
 
         home_key = (g.home_team_id, g.season_id)
-        home_off_season = (
-            season_tot_pf[home_key] / season_cnt[home_key] if season_cnt[home_key] else 0.0
-        )
-        home_def_season = (
-            season_tot_pa[home_key] / season_cnt[home_key] if season_cnt[home_key] else 0.0
-        )
+        home_off_season = float(season_tot_pf[home_key])
+        home_def_season = float(season_tot_pa[home_key])
 
         buffer.append(
             TeamGameState(
@@ -156,12 +273,8 @@ def backfill_team_game_state(
         away_def_l5 = _avg_points_against(away_last5)
 
         away_key = (g.away_team_id, g.season_id)
-        away_off_season = (
-            season_tot_pf[away_key] / season_cnt[away_key] if season_cnt[away_key] else 0.0
-        )
-        away_def_season = (
-            season_tot_pa[away_key] / season_cnt[away_key] if season_cnt[away_key] else 0.0
-        )
+        away_off_season = float(season_tot_pf[away_key])
+        away_def_season = float(season_tot_pa[away_key])
 
         buffer.append(
             TeamGameState(
@@ -212,5 +325,8 @@ def backfill_team_game_state(
         session.add_all(buffer)
         session.commit()
         inserted += len(buffer)
+
+    backfill_team_game_state_avg_points(session)
+    backfill_team_game_state_football_rollups(session)
 
     return inserted

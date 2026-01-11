@@ -14,7 +14,7 @@ dependencies = [
     "alembic",
     "httpx",
     "python-dateutil",
-    "numpy",
+    "numpy>=2.0,<3.0",
     "scikit-learn",
     "pandas>=2.1,<3",
     "nfl_data_py",

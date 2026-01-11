@@ -28,7 +28,7 @@ class BaselineResult:
     zero_rmse: float
     home_mean_mae: float
     home_mean_rmse: float
-    coef: float | None
+    coef: dict[str, float] | None
     intercept: float | None
 
 
@@ -50,7 +50,6 @@ def run_baseline_point_diff(
     train = [r for r in rows if r["season_year"] < train_season_cutoff]
     test = [r for r in rows if r["season_year"] >= train_season_cutoff]
 
-    print(f"Training rows {len(rows)}: {len(train)}, test rows: {len(test)}")
     if not train:
         raise ValueError("No training rows produced — check training_data filters / joins")
 
@@ -62,7 +61,7 @@ def run_baseline_point_diff(
             [
                 [
                     r["matchup_edge_l3_l5"],
-                    r["yards_edge_l3_l5"],
+                    r["off_yards_edge_l3_l5"],
                     r["turnover_edge_l3_l5"],
                     r["season_strength"],
                     r["league_avg_pts_season_to_date"],
@@ -77,19 +76,12 @@ def run_baseline_point_diff(
             raise ValueError(
                 f"Non-finite value in X at row {i}, col {j}: {X[i, j]!r}. "
                 f"Row keys: matchup={data[i].get('matchup_edge_l3_l5')}, "
-                f"yards={data[i].get('yards_edge_l3_l5')}, "
+                f"off_yards={data[i].get('off_yards_edge_l3_l5')}, "
                 f"to={data[i].get('turnover_edge_l3_l5')}, "
                 f"season_strength={data[i].get('season_strength')}, "
                 f"league_avg={data[i].get('league_avg_pts_season_to_date')}"
             )
         y = np.array([r["point_diff"] for r in data], dtype=float)
-        print("X shape:", X.shape)
-        print("X abs max:", np.max(np.abs(X), axis=0))
-        print("X abs max overall:", np.max(np.abs(X)))
-
-        u, s, vt = np.linalg.svd(X, full_matrices=False)
-        print("singular values:", s[:10], "...", s[-3:])
-        print("condition number:", s[0] / s[-1])
 
         return X, y
 
@@ -101,22 +93,29 @@ def run_baseline_point_diff(
     home_mean = float(np.mean(y_train))
     home_pred = np.full_like(y_test, home_mean)
 
+    FEATURE_NAMES = [
+        "matchup_edge_l3_l5",
+        "off_yards_edge_l3_l5",
+        "turnover_edge_l3_l5",
+        "season_strength_pg",
+        "league_avg_pts_season_to_date",
+    ]
+
     # Model
     if model_kind == "ridge":
         model = Pipeline(
             [
                 ("scaler", StandardScaler()),
-                ("model", RidgeCV(alphas=np.logspace(-2, 3, 30), gcv_mode="eigen")),
+                ("model", RidgeCV(alphas=np.logspace(-2, 3, 30))),
             ]
         )
+
         model.fit(X_train, y_train)
         model_pred = model.predict(X_test)
 
-        print("alphas:", model.named_steps["model"].alphas)
-        print("alpha_:", model.named_steps["model"].alpha_)
-
         ridge: RidgeCV = model.named_steps["model"]
-        coef = float(ridge.coef_[0])
+        coefs = ridge.coef_.tolist()
+        coef_by_feature = dict(zip(FEATURE_NAMES, coefs, strict=False))
         intercept = float(ridge.intercept_)
         name = "ridgecv"
     else:
@@ -131,7 +130,6 @@ def run_baseline_point_diff(
             n_iter_no_change=30,
             random_state=42,
         )
-        coef = None
         intercept = None
         name = "hgb_depth3_leaf25"
 
@@ -152,6 +150,6 @@ def run_baseline_point_diff(
         zero_rmse=rmse(y_test, zero_pred),
         home_mean_mae=mae(y_test, home_pred),
         home_mean_rmse=rmse(y_test, home_pred),
-        coef=coef,
+        coef=coef_by_feature if model_kind == "ridge" else None,
         intercept=intercept,
     )

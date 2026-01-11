@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import Float, and_, cast, func, select
 from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import ColumnElement
 
 from odds_value.db.models import Game, Season, TeamGameState
 
@@ -34,10 +35,32 @@ class GameTrainingRow:
 
     # features
     matchup_edge_l3_l5: float | None
-    season_strength: float | None
+    season_strength_pg: float | None
     league_avg_pts_season_to_date: float | None
-    yards_edge_l3_l5: float | None
+    off_yards_edge_l3_l5: float | None
     turnover_edge_l3_l5: float | None
+
+
+def shrink(value: float, games_played: int, k: float = 6.0) -> float:
+    w = games_played / (games_played + k)
+    return w * value
+
+
+def shrink_sql(
+    value: Any,
+    games_played: Any,
+    k: float,
+) -> ColumnElement[float]:
+    """SQL version of shrink(): w * value, where w=gp/(gp+k).
+
+    Typed loosely because SQLAlchemy stubs model Labels / InstrumentedAttributes
+    differently across versions.
+    """
+    gp = func.coalesce(games_played, 0)
+    gp_f = cast(gp, Float)
+    w = gp_f / (gp_f + float(k))
+    v = cast(func.coalesce(value, 0.0), Float)
+    return w * v
 
 
 def z(x: Any) -> Any:
@@ -52,23 +75,33 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
     home = aliased(TeamGameState)
     away = aliased(TeamGameState)
 
-    matchup_edge_l3_l5 = (
-        (home.off_pts_l3 - away.def_pa_l5) - (away.off_pts_l3 - home.def_pa_l5)
-    ).label("matchup_edge_l3_l5")
+    games_min = func.least(home.games_played, away.games_played)
 
-    yards_edge_l3_l5 = (
-        (z(home.off_yards_l3) - z(away.def_yards_allowed_l5))
-        - (z(away.off_yards_l3) - z(home.def_yards_allowed_l5))
-    ).label("yards_edge_l3_l5")
+    matchup_edge_raw = (home.off_pts_l3 - away.def_pa_l5) - (away.off_pts_l3 - home.def_pa_l5)
+    matchup_edge_l3_l5 = shrink_sql(matchup_edge_raw, games_min, k=3.0).label("matchup_edge_l3_l5")
 
-    turnover_edge_l3_l5 = (
-        (z(away.off_turnovers_l3) - z(home.def_takeaways_l5))
-        - (z(home.off_turnovers_l3) - z(away.def_takeaways_l5))
+    # Offensive yardage edge (ability to gain yards)
+    off_yards_edge_l3_l5 = (home.off_yards_l3 - away.def_yards_allowed_l5) - (
+        away.off_yards_l3 - home.def_yards_allowed_l5
+    ).label("off_yards_edge_l3_l5")
+
+    turnover_edge_raw = (z(away.off_turnovers_l3) - z(home.def_takeaways_l5)) - (
+        z(home.off_turnovers_l3) - z(away.def_takeaways_l5)
+    )
+
+    turnover_edge_shrunk = shrink_sql(turnover_edge_raw, games_min, k=3.0)
+
+    turnover_edge_l3_l5 = func.least(
+        4.0,
+        func.greatest(-4.0, turnover_edge_shrunk),
     ).label("turnover_edge_l3_l5")
 
+    """
     season_strength = (
-        (home.off_pts_season - home.def_pa_season) - (away.off_pts_season - away.def_pa_season)
+        ((home.off_pts_season - home.def_pa_season) - (away.off_pts_season - away.def_pa_season))
+        / home.games_played
     ).label("season_strength")
+    """
 
     denom_home = func.nullif(cast(home.games_played, Float), 0.0)
     denom_away = func.nullif(cast(away.games_played, Float), 0.0)
@@ -92,6 +125,14 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
     away_avg_point_diff = (away_avg_points_for - away_avg_points_against).label(
         "away_avg_point_diff"
     )
+
+    home_strength_pg = home_avg_point_diff
+    away_strength_pg = away_avg_point_diff
+
+    home_strength_shrunk = shrink_sql(home_strength_pg, home.games_played, k=6.0)
+    away_strength_shrunk = shrink_sql(away_strength_pg, away.games_played, k=6.0)
+
+    season_strength = home_strength_shrunk - away_strength_shrunk
 
     g2 = aliased(Game)
 
@@ -132,11 +173,11 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
             away.off_pts_l3.label("away_off_pts_l3"),
             away.def_pa_l5.label("away_def_pa_l5"),
             # Feature baseline input
-            matchup_edge_l3_l5,
-            season_strength,
-            league_avg_pts_season_to_date,
-            yards_edge_l3_l5,
-            turnover_edge_l3_l5,
+            matchup_edge_l3_l5.label("matchup_edge_l3_l5"),
+            season_strength.label("season_strength"),
+            league_avg_pts_season_to_date.label("league_avg_pts_season_to_date"),
+            off_yards_edge_l3_l5.label("off_yards_edge_l3_l5"),
+            turnover_edge_l3_l5.label("turnover_edge_l3_l5"),
         )
         .select_from(Game)
         .join(Season, Season.id == Game.season_id)
@@ -170,9 +211,9 @@ def fetch_training_rows(session: Session, *, limit: int = 25) -> list[GameTraini
             away_avg_points_against=r["away_avg_points_against"],
             away_avg_point_diff=r["away_avg_point_diff"],
             matchup_edge_l3_l5=r["matchup_edge_l3_l5"],
-            season_strength=r["season_strength"],
+            season_strength_pg=r["season_strength"],
             league_avg_pts_season_to_date=float(r["league_avg_pts_season_to_date"]),
-            yards_edge_l3_l5=r["yards_edge_l3_l5"],
+            off_yards_edge_l3_l5=r["off_yards_edge_l3_l5"],
             turnover_edge_l3_l5=r["turnover_edge_l3_l5"],
         )
         for r in rows
