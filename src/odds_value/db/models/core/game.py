@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
+import sqlalchemy as sa
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from odds_value.db.base import Base, TimestampMixin
-from odds_value.db.enums import GameStatusEnum
+from odds_value.db.enums import GameStatusEnum, ProviderEnum
 
 
 class Game(Base, TimestampMixin):
@@ -20,6 +21,15 @@ class Game(Base, TimestampMixin):
     season_id: Mapped[int] = mapped_column(ForeignKey("seasons.id"), nullable=False)
 
     provider_game_id: Mapped[str] = mapped_column(String, nullable=False)
+    provider: Mapped[ProviderEnum] = mapped_column(
+        sa.Enum(
+            ProviderEnum,
+            name="providerenum",
+            values_callable=lambda enum_cls: [e.value for e in enum_cls],
+        ),
+        nullable=False,
+        server_default=text("'api_sports'"),
+    )
 
     start_time: Mapped[datetime] = mapped_column(nullable=False)
 
@@ -64,7 +74,7 @@ class Game(Base, TimestampMixin):
     )
 
     __table_args__ = (
-        UniqueConstraint("league_id", "provider_game_id", name="uq_games_league_provider_game_id"),
+        UniqueConstraint("provider", "provider_game_id", name="uq_game_provider_ext_id"),
         Index("ix_games_league_start_time", "league_id", "start_time"),
         Index("ix_games_season_start_time", "season_id", "start_time"),
         Index("ix_games_home_team", "home_team_id"),

@@ -14,11 +14,12 @@ from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
 from odds_value.ingestion.api_sports.api_sports_upsert import (
     maybe_store_payload,
     upsert_game_from_api_sports_item,
-    upsert_league,
-    upsert_season,
     upsert_team_game_stats,
 )
+
+# from odds_value.repos.games_repo import upsert_game
 from odds_value.ingestion.common.dates import parse_api_sports_game_datetime
+from odds_value.repos.entities_repo import upsert_league, upsert_season
 
 
 def is_regular_season_game(item: dict[str, Any]) -> bool:

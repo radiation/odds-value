@@ -8,7 +8,7 @@ from odds_value.cli.common import session_scope
 from odds_value.core.config import settings
 from odds_value.db.enums import SportEnum
 from odds_value.ingestion.api_sports.api_sports_client import ApiSportsClient
-from odds_value.ingestion.api_sports.games import (
+from odds_value.ingestion.ingest_games import (
     ingest_games,
     ingest_games_with_stats,
 )

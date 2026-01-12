@@ -6,7 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from odds_value.db.enums import SportEnum
+from odds_value.db.enums import ProviderEnum, SportEnum
 from odds_value.db.models import Game, IngestedPayload, League, Season, Team, TeamGameStats, Venue
 from odds_value.db.models.features.baseball_team_game_stats import BaseballTeamGameStats
 from odds_value.db.models.features.football_team_game_stats import FootballTeamGameStats
@@ -21,52 +21,7 @@ from odds_value.ingestion.common.dates import (
     parse_nfl_week,
 )
 from odds_value.ingestion.common.utils import none_if_empty
-
-
-def upsert_league(
-    session: Session, *, provider_league_id: str, name: str, sport: SportEnum
-) -> League:
-    league = session.scalar(select(League).where(League.provider_league_id == provider_league_id))
-    if league:
-        league.name = name
-        league.sport = sport
-        return league
-
-    league = League(provider_league_id=provider_league_id, name=name, sport=sport, is_active=True)
-    session.add(league)
-    session.flush()
-    return league
-
-
-def upsert_season(
-    session: Session,
-    *,
-    league_id: int,
-    year: int,
-    name: str | None = None,
-    is_active: bool | None = None,
-) -> Season:
-    stmt = select(Season).where(
-        Season.league_id == league_id,
-        Season.year == year,
-    )
-    season = session.scalar(stmt)
-    if season:
-        if name is not None:
-            season.name = name
-        if is_active is not None:
-            season.is_active = is_active
-        return season
-
-    season = Season(
-        league_id=league_id,
-        year=year,
-        name=name,
-        is_active=bool(is_active) if is_active is not None else False,
-    )
-    session.add(season)
-    session.flush()
-    return season
+from odds_value.repos.games_repo import upsert_game
 
 
 def upsert_team(
@@ -203,8 +158,8 @@ def upsert_game_from_api_sports_item(
         logo_url=none_if_empty(away.get("logo")),
     )
 
-    venue_id: int | None = None
     venue_obj = game_obj.get("venue")
+    venue: Venue | None = None
     if isinstance(venue_obj, dict):
         provider_venue_id = venue_obj.get("id")
         name = none_if_empty(venue_obj.get("name"))
@@ -218,7 +173,6 @@ def upsert_game_from_api_sports_item(
                 name=name,
                 city=city,
             )
-            venue_id = venue.id
 
     home_score = None
     away_score = None
@@ -247,38 +201,24 @@ def upsert_game_from_api_sports_item(
     if season is None:
         return None
 
-    game = session.scalar(select(Game).where(Game.provider_game_id == provider_game_id))
-    if game:
-        game.league_id = league.id
-        game.season_id = season.id
-        game.start_time = start_time
-        game.venue_id = venue_id
-        game.status = map_game_status(status_short)
-        game.week = week
-        game.home_team_id = home_team.id
-        game.away_team_id = away_team.id
-        game.home_score = home_score
-        game.away_score = away_score
-        game.source_last_seen_at = source_last_seen_at
-        return game
-
-    game = Game(
-        league_id=league.id,
-        season_id=season.id if season else None,
+    game = upsert_game(
+        session=session,
+        league=league,
+        season=season,
+        provider=ProviderEnum.API_SPORTS,
         provider_game_id=provider_game_id,
         start_time=start_time,
-        venue_id=venue_id,
+        home_team=home_team,
+        away_team=away_team,
+        venue=venue,
         status=map_game_status(status_short),
         week=week,
         is_neutral_site=False,
-        home_team_id=home_team.id,
-        away_team_id=away_team.id,
         home_score=home_score,
         away_score=away_score,
         source_last_seen_at=source_last_seen_at,
     )
-    session.add(game)
-    session.flush()
+
     return game
 
 

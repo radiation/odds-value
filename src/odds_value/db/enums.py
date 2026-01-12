@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, StrEnum
+
+
+class ProviderEnum(StrEnum):
+    API_SPORTS = "api_sports"
+    NFLVERSE = "nflverse"
+    ODDS_API = "odds_api"
 
 
 class SportEnum(str, Enum):
