@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,26 +9,12 @@ from sklearn.ensemble import HistGradientBoostingRegressor  # type: ignore[impor
 from sklearn.linear_model import RidgeCV  # type: ignore[import-untyped]
 from sklearn.pipeline import Pipeline  # type: ignore[import-untyped]
 from sklearn.preprocessing import StandardScaler  # type: ignore[import-untyped]
-from sqlalchemy import func
-from sqlalchemy.engine import RowMapping
 from sqlalchemy.orm import Session
 
-from odds_value.analytics.training_data import build_training_rows_stmt
+from odds_value.analytics.training.schema import BaselineResult, GameTrainingRow
+from odds_value.repos.training_data_repo import fetch_training_rows
 
 ArrayF64 = NDArray[np.float64]
-
-
-@dataclass(frozen=True)
-class BaselineResult:
-    model_name: str
-    model_mae: float
-    model_rmse: float
-    zero_mae: float
-    zero_rmse: float
-    home_mean_mae: float
-    home_mean_rmse: float
-    coef: dict[str, float] | None
-    intercept: float | None
 
 
 def run_baseline_point_diff(
@@ -38,17 +23,11 @@ def run_baseline_point_diff(
     train_season_cutoff: int,
     model_kind: str = "ridge",
 ) -> BaselineResult:
-    # Pull rows
-    stmt = build_training_rows_stmt()
-    stmt = stmt.where(
-        func.coalesce(stmt.selected_columns.home_games_played, 0) >= 3,
-        func.coalesce(stmt.selected_columns.away_games_played, 0) >= 3,
-    )
-    rows = session.execute(stmt).mappings().all()
+    rows: list[GameTrainingRow] = fetch_training_rows(session)
 
     # Split by season
-    train = [r for r in rows if r["season_year"] < train_season_cutoff]
-    test = [r for r in rows if r["season_year"] >= train_season_cutoff]
+    train = [r for r in rows if r.season_year < train_season_cutoff]
+    test = [r for r in rows if r.season_year >= train_season_cutoff]
 
     if not train:
         raise ValueError("No training rows produced — check training_data filters / joins")
@@ -56,15 +35,15 @@ def run_baseline_point_diff(
     if not test:
         raise ValueError("No test rows produced — check training_data filters / joins")
 
-    def extract_xy(data: Sequence[RowMapping]) -> tuple[ArrayF64, ArrayF64]:
+    def extract_xy(data: Sequence[GameTrainingRow]) -> tuple[ArrayF64, ArrayF64]:
         X = np.array(
             [
                 [
-                    r["matchup_edge_l3_l5"],
-                    r["off_yards_edge_l3_l5"],
-                    r["turnover_edge_l3_l5"],
-                    r["season_strength"],
-                    r["league_avg_pts_season_to_date"],
+                    r.matchup_edge_l3_l5,
+                    r.off_yards_edge_l3_l5,
+                    r.turnover_edge_l3_l5,
+                    r.season_strength_pg,
+                    r.league_avg_pts_season_to_date,
                 ]
                 for r in data
             ],
@@ -75,13 +54,13 @@ def run_baseline_point_diff(
             i, j = bad[0]
             raise ValueError(
                 f"Non-finite value in X at row {i}, col {j}: {X[i, j]!r}. "
-                f"Row keys: matchup={data[i].get('matchup_edge_l3_l5')}, "
-                f"off_yards={data[i].get('off_yards_edge_l3_l5')}, "
-                f"to={data[i].get('turnover_edge_l3_l5')}, "
-                f"season_strength={data[i].get('season_strength')}, "
-                f"league_avg={data[i].get('league_avg_pts_season_to_date')}"
+                f"Row keys: matchup={data[i].matchup_edge_l3_l5}, "
+                f"off_yards={data[i].off_yards_edge_l3_l5}, "
+                f"to={data[i].turnover_edge_l3_l5}, "
+                f"season_strength={data[i].season_strength_pg}, "
+                f"league_avg={data[i].league_avg_pts_season_to_date}"
             )
-        y = np.array([r["point_diff"] for r in data], dtype=float)
+        y = np.array([r.point_diff for r in data], dtype=float)
 
         return X, y
 

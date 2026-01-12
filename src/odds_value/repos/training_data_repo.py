@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import Float, and_, cast, func, select
@@ -8,42 +7,8 @@ from sqlalchemy.orm import Session, aliased
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
+from odds_value.analytics.training.schema import GameTrainingRow
 from odds_value.db.models import Game, Season, TeamGameState
-
-
-@dataclass(frozen=True)
-class GameTrainingRow:
-    game_id: int
-    start_time: object
-    season_id: int
-    week: int
-
-    home_team_id: int
-    away_team_id: int
-
-    # target
-    point_diff: int
-
-    # raw belief features
-    home_avg_points_for: float | None
-    home_avg_points_against: float | None
-    home_avg_point_diff: float | None
-
-    away_avg_points_for: float | None
-    away_avg_points_against: float | None
-    away_avg_point_diff: float | None
-
-    # features
-    matchup_edge_l3_l5: float | None
-    season_strength_pg: float | None
-    league_avg_pts_season_to_date: float | None
-    off_yards_edge_l3_l5: float | None
-    turnover_edge_l3_l5: float | None
-
-
-def shrink(value: float, games_played: int, k: float = 6.0) -> float:
-    w = games_played / (games_played + k)
-    return w * value
 
 
 def shrink_sql(
@@ -67,7 +32,7 @@ def z(x: Any) -> Any:
     return func.coalesce(x, 0)
 
 
-def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
+def build_training_rows_stmt(*, min_games_played: int = 0) -> Select[tuple[Any, ...]]:
     """
     One row per game with joined home/away TeamGameState (pre-game belief).
     Filters to games with final scores and matching TeamGameState rows.
@@ -95,13 +60,6 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
         4.0,
         func.greatest(-4.0, turnover_edge_shrunk),
     ).label("turnover_edge_l3_l5")
-
-    """
-    season_strength = (
-        ((home.off_pts_season - home.def_pa_season) - (away.off_pts_season - away.def_pa_season))
-        / home.games_played
-    ).label("season_strength")
-    """
 
     denom_home = func.nullif(cast(home.games_played, Float), 0.0)
     denom_away = func.nullif(cast(away.games_played, Float), 0.0)
@@ -136,16 +94,19 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
 
     g2 = aliased(Game)
 
-    league_avg_pts_season_to_date = (
-        select(func.avg(cast(g2.home_score + g2.away_score, Float)))
-        .where(
-            g2.season_id == Game.season_id,
-            g2.start_time < Game.start_time,
-            g2.home_score.is_not(None),
-            g2.away_score.is_not(None),
-        )
-        .correlate(Game)
-        .scalar_subquery()
+    league_avg_pts_season_to_date = func.coalesce(
+        (
+            select(func.avg(cast(g2.home_score + g2.away_score, Float)))
+            .where(
+                g2.season_id == Game.season_id,
+                g2.start_time < Game.start_time,
+                g2.home_score.is_not(None),
+                g2.away_score.is_not(None),
+            )
+            .correlate(Game)
+            .scalar_subquery()
+        ),
+        0.0,
     ).label("league_avg_pts_season_to_date")
 
     stmt = (
@@ -188,18 +149,26 @@ def build_training_rows_stmt() -> Select[tuple[Any, ...]]:
         .order_by(Game.start_time.asc(), Game.id.asc())
     )
 
+    if min_games_played > 0:
+        stmt = stmt.where(
+            func.coalesce(stmt.selected_columns.home_games_played, 0) >= min_games_played,
+            func.coalesce(stmt.selected_columns.away_games_played, 0) >= min_games_played,
+        )
+
     return stmt
 
 
-def fetch_training_rows(session: Session, *, limit: int = 25) -> list[GameTrainingRow]:
-    stmt = build_training_rows_stmt().limit(limit)
+def fetch_training_rows(session: Session) -> list[GameTrainingRow]:
+    stmt = build_training_rows_stmt()
     rows = session.execute(stmt).mappings().all()
+    print(f"Fetched {len(rows)} training rows")
 
     return [
         GameTrainingRow(
             game_id=r["game_id"],
             start_time=r["start_time"],
             season_id=r["season_id"],
+            season_year=r["season_year"],
             week=r["week"],
             home_team_id=r["home_team_id"],
             away_team_id=r["away_team_id"],

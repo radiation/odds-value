@@ -5,7 +5,6 @@ from typing import Annotated
 import typer
 
 from odds_value.analytics.baseline import run_baseline_point_diff
-from odds_value.analytics.training_data import fetch_training_rows
 from odds_value.cli.common import session_scope
 from odds_value.jobs.team_game_state import backfill_team_game_state
 
@@ -49,17 +48,3 @@ def baseline(
         )
 
     typer.echo(result)
-
-
-@team_game_state_app.command("preview-training")
-def preview_training(
-    limit: Annotated[int, typer.Option(help="Number of rows to print")] = 20,
-) -> None:
-    """
-    Preview training rows used for modeling.
-    """
-    with session_scope() as session:
-        rows = fetch_training_rows(session, limit=limit)
-
-    for r in rows:
-        typer.echo(str(r))
